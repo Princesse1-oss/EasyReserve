@@ -1,0 +1,37 @@
+<nav class="navbar" *ngIf="isLoggedIn">
+  <div class="navbar-brand">
+    <a routerLink="/dashboard">🚌 REBUS</a>
+  </div>
+
+  <!-- Bouton burger (mobile) -->
+  <button class="burger" (click)="toggleMenu()">☰</button>
+
+  <!-- Liens -->
+  <ul class="navbar-links" [class.ouvert]="menuOuvert">
+    <li>
+      <a routerLink="/dashboard" routerLinkActive="actif"
+        (click)="menuOuvert = false">
+        Dashboard
+      </a>
+    </li>
+    <li>
+      <a routerLink="/trajets" routerLinkActive="actif"
+        (click)="menuOuvert = false">
+        Trajets
+      </a>
+    </li>
+    <li>
+      <a routerLink="/mes-reservations" routerLinkActive="actif"
+        (click)="menuOuvert = false">
+        Mes réservations
+      </a>
+    </li>
+  </ul>
+
+  <!-- Utilisateur connecté -->
+  <div class="navbar-user" *ngIf="user">
+    <span class="user-nom">👤 {{ user.username }}</span>
+    <span class="user-role">{{ isAdmin ? 'Admin' : 'Client' }}</span>
+    <button class="btn-logout" (click)="onLogout()">Déconnexion</button>
+  </div>
+</nav>

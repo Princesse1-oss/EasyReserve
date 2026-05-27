@@ -1,0 +1,36 @@
+<div class="auth-container">
+  <div class="auth-card">
+    <h2>EasyReserve</h2>
+    <p class="subtitle">Connectez-vous pour accéder à l'application</p>
+
+    <div *ngIf="erreur" class="error-banner">
+      {{ erreur }}
+    </div>
+
+    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
+      <div class="form-group">
+        <label for="username">Nom d'utilisateur</label>
+        <input type="text" id="username" formControlName="username" placeholder="Ex: Merveille" />
+        <span class="field-error" *ngIf="username?.invalid && username?.touched">
+          Nom d'utilisateur obligatoire.
+        </span>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Mot de passe</label>
+        <input type="password" id="password" formControlName="password" placeholder="••••••••" />
+        <span class="field-error" *ngIf="password?.invalid && password?.touched">
+          Mot de passe requis (min. 4 car.).
+        </span>
+      </div>
+
+      <button type="submit" [disabled]="loginForm.invalid || loading" class="btn-primary">
+        <span>{{ loading ? 'Connexion en cours...' : 'Se connecter' }}</span>
+      </button>
+    </form>
+
+    <p class="auth-footer">
+      Nouveau sur EasyReserve ? <a routerLink="/register">Créer un compte</a>
+    </p>
+  </div>
+</div>

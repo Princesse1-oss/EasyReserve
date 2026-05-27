@@ -1,0 +1,260 @@
+// ===== NAVBAR (identique à client-trajets) =====
+.navbar-client {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 0.75rem 0;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+
+  .container-fluid {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .navbar-brand-wrapper {
+    display: flex;
+    align-items: center;
+    
+    .navbar-brand {
+      color: white;
+      font-size: 1.5rem;
+      font-weight: 700;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      margin: 0;
+      
+      &:hover { color: rgba(255,255,255,0.9); }
+      i { font-size: 2rem; }
+    }
+  }
+
+  .navbar-nav-custom {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+
+    .nav-item-custom {
+      color: rgba(255,255,255,0.9);
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      font-weight: 500;
+
+      &:hover, &.active {
+        background: rgba(255,255,255,0.2);
+        color: white;
+        transform: translateY(-2px);
+      }
+      i { font-size: 1.2rem; }
+      .nav-text { font-size: 0.95rem; }
+    }
+  }
+
+  .navbar-user-menu {
+    .user-info {
+      position: relative;
+
+      .user-avatar {
+        display: flex;
+        align-items: center;
+        background: rgba(255,255,255,0.2);
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+
+        &:hover { background: rgba(255,255,255,0.3); }
+
+        .avatar-img {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          border: 2px solid white;
+          margin-right: 0.75rem;
+        }
+        .user-name {
+          color: white;
+          font-weight: 600;
+          font-size: 0.95rem;
+        }
+        i { color: white; margin-left: 0.5rem; }
+      }
+
+      .dropdown-menu-custom {
+        position: absolute;
+        top: calc(100% + 10px);
+        right: 0;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        min-width: 250px;
+        padding: 0.5rem 0;
+        z-index: 1000;
+        display: none;
+
+        // Affichage au hover (ou utiliser un dropdown library)
+        .user-avatar:hover + & {
+          display: block;
+        }
+
+        .dropdown-header {
+          padding: 1rem 1.25rem;
+          border-bottom: 1px solid #e9ecef;
+          margin-bottom: 0.5rem;
+          strong { display: block; color: #2c3e50; margin-bottom: 0.25rem; }
+          small { color: #7f8c8d; font-size: 0.85rem; }
+        }
+
+        .dropdown-item {
+          padding: 0.75rem 1.25rem;
+          color: #2c3e50;
+          text-decoration: none;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          background: none;
+          border: none;
+          width: 100%;
+          text-align: left;
+          cursor: pointer;
+
+          &:hover {
+            background: #f8f9fa;
+            color: #667eea;
+            padding-left: 1.5rem;
+          }
+          i { font-size: 1.1rem; margin-right: 0.75rem; }
+        }
+
+        .dropdown-divider {
+          margin: 0.5rem 0;
+          border-color: #e9ecef;
+        }
+      }
+    }
+  }
+}
+
+// ===== CONTENU PRINCIPAL =====
+.main-content {
+  background: #f8f9fa;
+  min-height: calc(100vh - 200px);
+}
+
+// ===== CARTE DE RÉSERVATION =====
+.reservation-card {
+  border-radius: 16px;
+  overflow: hidden;
+
+  .card-header {
+    &.bg-gradient-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+  }
+
+  .card-body {
+    .form-control-lg, .form-select-lg {
+      border-radius: 10px;
+      border: 2px solid #e9ecef;
+      padding: 0.75rem 1rem;
+
+      &:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
+      }
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      border-radius: 10px;
+      font-weight: 600;
+
+      &:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      }
+    }
+  }
+}
+
+// ===== FOOTER CLIENT =====
+.footer-client {
+  background: white;
+  border-top: 1px solid #e9ecef;
+  padding: 1.5rem 0;
+  margin-top: auto;
+
+  .footer-brand {
+    color: #667eea;
+    font-weight: 700;
+    font-size: 1.2rem;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+
+    &:hover { color: #764ba2; }
+  }
+
+  .footer-links {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+
+    a {
+      color: #6c757d;
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+
+      &:hover {
+        color: #667eea;
+        text-decoration: underline;
+      }
+    }
+  }
+
+  .btn-outline-danger {
+    border-radius: 8px;
+    font-weight: 500;
+
+    &:hover {
+      background: #dc3545;
+      color: white;
+    }
+  }
+}
+
+// ===== RESPONSIVE =====
+@media (max-width: 992px) {
+  .navbar-client {
+    .container-fluid { flex-wrap: wrap; }
+    .navbar-nav-custom {
+      order: 3;
+      width: 100%;
+      margin-top: 1rem;
+      justify-content: center;
+    }
+    .navbar-user-menu { order: 2; }
+  }
+}
+
+@media (max-width: 768px) {
+  .navbar-client {
+    .navbar-brand { font-size: 1.2rem; }
+    .navbar-nav-custom { flex-direction: column; }
+    .user-avatar .user-name { display: none; }
+  }
+  
+  .footer-client {
+    .row > div { text-align: center !important; }
+    .footer-links { flex-direction: column; gap: 0.5rem; }
+  }
+}

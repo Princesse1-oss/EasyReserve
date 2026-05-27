@@ -1,0 +1,210 @@
+
+<div class="dashboard-sidebar-layout">
+  <!-- Sidebar Navigation Core Column -->
+  <aside class="sidebar-vertical">
+    <div class="agency-title-header" *ngIf="agence">
+      <h4>{{ agence.nom }}</h4>
+      <span>Espace Gérant de Gare</span>
+    </div>
+    <nav class="navigation-menu">
+      <button [class.active]="currentSection === 'dashboard'" (click)="navigateToSection('dashboard')">📊 Tableau de bord</button>
+      <button [class.active]="currentSection === 'trajets'" (click)="navigateToSection('trajets')">📅 Trajets & Horaires</button>
+      <button [class.active]="currentSection === 'reservations'" (click)="navigateToSection('reservations')">🎫 Réservations Client</button>
+      <button [class.active]="currentSection === 'buses'" (click)="navigateToSection('buses')">🚌 Gestion de Bus</button>
+    </nav>
+  </aside>
+
+  <!-- Content Stream Engine View -->
+  <main class="main-panel-content">
+
+    <header class="topbar">
+      <div class="topbar-left">
+        <!-- Nom / Logo de la Gare ou Agence du gestionnaire -->
+        <span class="company-logo">🏢 {{ agence?.nom || 'Ma Gare REBUS' }}</span>
+      </div>
+      <div class="topbar-right">
+        <!-- Identité et bouton de sortie de session -->
+        <span class="user-name">👤 {{ user?.username || 'Gestionnaire' }}</span>
+        <button class="btn-logout" (click)="onLogout()">Se déconnecter</button>
+      </div>
+    </header>
+    
+    <!-- Dynamic State Notification Banners -->
+    <div *ngIf="successMsg" class="kpi-alert alert-success">{{ successMsg }}</div>
+    <div *ngIf="errorMsg" class="kpi-alert alert-danger">{{ errorMsg }}</div>
+    <div *ngIf="loading" class="kpi-alert alert-info">Synchronisation avec le serveur Django...</div>
+
+    <div [ngSwitch]="currentSection" *ngIf="!loading">
+      
+      <!-- SUB-PAGE 1: TABLEAU DE BORD PRINCIPAL -->
+      <div *ngSwitchCase="'dashboard'">
+        <h2>Tableau de Bord Métriques</h2>
+        <div class="kpi-metrics-grid">
+          <div class="metric-card border-success">
+            <h5>💰 Chiffre d'Affaires</h5>
+            <p class="val text-success">{{ chiffreAffaires | number }} FCFA</p>
+          </div>
+          <div class="metric-card border-primary">
+            <h5>🎫 Total Réservations</h5>
+            <p class="val text-primary">{{ totalReservationsCount }} billets</p>
+          </div>
+          <div class="metric-card border-warning">
+            <h5>🚍 Bus en Route</h5>
+            <p class="val text-warning">{{ busesEnRoute }} en transit</p>
+          </div>
+          <div class="metric-card border-info">
+            <h5>📈 Taux d'Occupation</h5>
+            <p class="val text-info">{{ tauxOccupation }}%</p>
+          </div>
+        </div>
+
+        <div class="grid-card-table" style="margin-top: 25px;">
+          <h3>📋 Liste des Départs</h3>
+          <table class="kpi-table-view">
+            <thead>
+              <tr><th>Itinéraire</th><th>Date</th><th>Heure</th><th>Places Disponibles</th></tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let t of trajets.slice(0, 5)">
+                <td><strong>{{ t.ville_depart }} ➔ {{ t.ville_arrivee }}</strong></td>
+                <td>{{ t.date_depart }}</td>
+                <td>{{ t.heure_depart }}</td>
+                <td>
+                  <span [class]="t.places_disponibles === 0 ? 'badge-pill complet' : 'badge-pill libre'">
+                    {{ t.places_disponibles === 0 ? 'Complet' : t.places_disponibles + ' places restantes' }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SUB-PAGE 2: TRAJETS & HORAIRES -->
+      <div *ngSwitchCase="'trajets'">
+        <h2>Trajets & Horaires</h2>
+        <div class="kpi-metrics-grid">
+          <div class="metric-card border-primary"><h5>🚀 Départs Aujourd'hui</h5><p class="val text-primary">{{ departsAujourdhui }} trajets</p></div>
+          <div class="metric-card border-info"><h5>📊 Taux d'Occupation</h5><p class="val text-info">{{ tauxOccupation }}%</p></div>
+          <div class="metric-card border-danger"><h5>🚨 Alertes Tarifs</h5><p class="val text-danger">{{ alerteTarif }}</p></div>
+          <div class="metric-card border-success"><h5>🔮 Revenu Prévisionnel (24h)</h5><p class="val text-success">{{ revenuPrevisionnel | number }} FCFA</p></div>
+        </div>
+
+        <div class="split-form-table-layout" style="margin-top: 25px;">
+          <div class="grid-card-table">
+            <h3>Planifier une Ligne</h3>
+            <form [formGroup]="trajetForm" (ngSubmit)="addTrajetSubmit()">
+              <div class="kpi-input-group"><label>Ville de Départ</label><input type="text" formControlName="ville_depart" placeholder="Yaoundé" /></div>
+              <div class="kpi-input-group"><label>Ville d'Arrivée</label><input type="text" formControlName="ville_arrivee" placeholder="Douala" /></div>
+              <div class="kpi-input-group"><label>Date de Départ</label><input type="date" formControlName="date_depart" /></div>
+              <div class="kpi-input-group"><label>Heure de Départ</label><input type="time" formControlName="heure_depart" /></div>
+              <div class="kpi-input-group"><label>Tarif du Billet (FCFA)</label><input type="number" formControlName="prix" placeholder="5000" /></div>
+              <div class="kpi-input-group">
+                <label>Affecter un Bus Libre</label>
+                <select formControlName="bus">
+                  <option value="">-- Choisir le véhicule --</option>
+                  <option *ngFor="let b of buses" [value]="b.id">{{ b.matricule }} ({{ b.type_bus | uppercase }})</option>
+                </select>
+              </div>
+              <button type="submit" class="kpi-action-button" [disabled]="trajetForm.invalid">Créer le Trajet</button>
+            </form>
+          </div>
+
+          <div class="grid-card-table">
+            <h3>Catalogue Complet des Trajets</h3>
+            <table class="kpi-table-view">
+              <thead><tr><th>Itinéraire</th><th>Date & Heure</th><th>Prix</th></tr></thead>
+              <tbody>
+                <tr *ngFor="let t of trajets">
+                  <td>{{ t.ville_depart }} ➔ {{ t.ville_arrivee }}</td>
+                  <td>{{ t.date_depart }} à {{ t.heure_depart }}</td>
+                  <td>{{ t.prix }} FCFA</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUB-PAGE 3: RÉSERVATIONS CLIENT -->
+      <div *ngSwitchCase="'reservations'">
+        <h2>Réservations Client & Taux de Remplissage</h2>
+        
+        <div class="grid-card-table" style="margin-bottom: 25px;">
+          <h3>📊 Remplissage par Itinéraire</h3>
+          <table class="kpi-table-view">
+            <thead><tr><th>Trajet Planifié</th><th>Départ</th><th>Nombre de Places Restantes</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let t of trajets">
+                <td>{{ t.ville_depart }} ➔ {{ t.ville_arrivee }}</td>
+                <td>Le {{ t.date_depart }} à {{ t.heure_depart }}</td>
+                <td>
+                  <span [class]="t.places_disponibles === 0 ? 'badge-pill complet' : 'badge-pill libre'">
+                    {{ t.places_disponibles === 0 ? 'Complet' : t.places_disponibles + ' places libres' }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="grid-card-table">
+          <h3>📋 Commandes de Billets à Traiter</h3>
+          <table class="kpi-table-view">
+            <thead><tr><th>Passager</th><th>Itinéraire</th><th>Siège</th><th>Statut</th><th>Action</th></tr></thead>
+            <tbody>
+              <tr *ngFor="let r of reservations">
+                <td><strong>{{ r.client_username }}</strong></td>
+                <td>{{ r.trajet_detail?.ville_depart }} ➔ {{ r.trajet_detail?.ville_arrivee }}</td>
+                <td>N° {{ r.place_detail?.numero_siege || r.place }}</td>
+                <td><span class="status-marker" [ngClass]="r.statut">{{ r.statut | uppercase }}</span></td>
+                <td>
+                  <button *ngIf="r.statut === 'en_attente'" (click)="validerBilletAchat(r.id)" class="kpi-button-validate">Valider Achat</button>
+                  <span *ngIf="r.statut !== 'en_attente'" style="color: #aaa; font-size: 13px;">Archivé</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SUB-PAGE 4: GESTION DE BUS -->
+      <div *ngSwitchCase="'buses'">
+        <h2>Gestion de la Flotte Active</h2>
+        <div class="split-form-table-layout">
+          <div class="grid-card-table">
+            <h3>Créer un Bus</h3>
+            <form [formGroup]="busForm" (ngSubmit)="addBusSubmit()">
+              <div class="kpi-input-group"><label>Numéro de Matricule</label><input type="text" formControlName="matricule" placeholder="LT 7721 AA" /></div>
+              <div class="kpi-input-group"><label>Nombre de Places Assises</label><input type="number" formControlName="capacite" /></div>
+              <div class="kpi-input-group">
+                <label>Gamme Technique</label>
+                <select formControlName="type_bus">
+                  <option value="standard">Standard (Classique)</option>
+                  <option value="vip">VIP (Climatisé)</option>
+                  <option value="minibus">Minibus Coaster</option>
+                </select>
+              </div>
+              <button type="submit" class="kpi-action-button" [disabled]="busForm.invalid">Ajouter à la Flotte</button>
+            </form>
+          </div>
+
+          <div class="grid-card-table">
+            <h3>Flotte de Bus Enregistrée</h3>
+            <table class="kpi-table-view">
+              <thead><tr><th>Matricule</th><th>Catégorie</th><th>Capacité Active</th></tr></thead>
+              <tbody>
+                <tr *ngFor="let b of buses">
+                  <td><strong>{{ b.matricule }}</strong></td>
+                  <td><span class="type-tag">{{ b.type_bus | uppercase }}</span></td>
+                  <td>{{ b.capacite }} places configurées</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>

@@ -1,0 +1,169 @@
+<div class="dashboard-sidebar-layout">
+  
+  <!-- SIDEBAR LATÉRALE -->
+  <aside class="sidebar-vertical">
+    <div class="agency-title-header">
+      <h4>REBUS</h4>
+      <span>Espace Gérant de Gare</span>
+    </div>
+    <nav class="navigation-menu">
+      <a routerLink="/gestionnaire/dashboard" class="nav-button">📊 Tableau de bord</a>
+      <a routerLink="/gestionnaire/trajets" class="nav-button active">📅 Trajets & Horaires</a>
+      <a routerLink="/gestionnaire/reservations" class="nav-button">🎫 Réservations Client</a>
+      <a routerLink="/gestionnaire/buses" class="nav-button">🚌 Gestion de Bus</a>
+    </nav>
+  </aside>
+
+  <!-- PANNEAU PRINCIPAL -->
+  <main class="main-panel-content">
+    
+    <!-- TOPBAR FIXÉE TOUT EN HAUT -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <span class="company-logo">📅 Horaires & Planification REBUS</span>
+      </div>
+      <div class="topbar-right">
+        <span class="user-name">👤 Mon Espace</span>
+      </div>
+    </header>
+
+    <!-- CONTENU INTERNE DE LA PAGE -->
+    <div class="page-inner-content">
+      <h2>Gestion des Trajets & Horaires</h2>
+      <p class="subtitle-page">Planifiez de nouvelles lignes régulières et gérez l'attribution de votre flotte active</p>
+
+      <!-- BLOC DES KPIs -->
+      <div class="kpi-grid">
+        <div class="kpi-card text-primary">
+          <h3>🚀 Départs Programmés</h3>
+          <p class="value">{{ departsAujourdhui }} trajets</p>
+        </div>
+        <div class="kpi-card text-info">
+          <h3>📊 Taux d'Occupation</h3>
+          <p class="value">{{ tauxOccupationMoyen }}%</p>
+        </div>
+        <div class="kpi-card text-danger">
+          <h3>🚨 Alertes Tarifs</h3>
+          <p class="value">{{ alerteTarif }}</p>
+        </div>
+        <div class="kpi-card text-success">
+          <h3>🔮 Revenu Prévisionnel</h3>
+          <p class="value">{{ revenuPrevisionnel | number }} FCFA</p>
+        </div>
+      </div>
+
+      <div class="split-form-table-layout">
+        
+        <!-- CARTE : FORMULAIRE DE CRÉATION -->
+        <div class="grid-card-table">
+          <h3>Planifier une Ligne</h3>
+          
+          <form [formGroup]="trajetForm" (ngSubmit)="onSubmit()">
+            
+            <div class="kpi-input-group">
+              <label>Ville de Départ *</label>
+              <input type="text" formControlName="ville_depart" placeholder="Ex: Yaoundé" />
+              <span class="field-error" *ngIf="trajetForm.get('ville_depart')?.invalid && trajetForm.get('ville_depart')?.touched">
+                La ville de départ est obligatoire
+              </span>
+            </div>
+
+            <div class="kpi-input-group">
+              <label>Ville d'Arrivée *</label>
+              <input type="text" formControlName="ville_arrivee" placeholder="Ex: Douala" />
+              <span class="field-error" *ngIf="trajetForm.get('ville_arrivee')?.invalid && trajetForm.get('ville_arrivee')?.touched">
+                La ville d'arrivée est obligatoire
+              </span>
+            </div>
+
+            <div class="kpi-input-group">
+              <label>Date de Départ *</label>
+              <input type="date" formControlName="date_depart" />
+              <span class="field-error" *ngIf="trajetForm.get('date_depart')?.invalid && trajetForm.get('date_depart')?.touched">
+                Veuillez sélectionner une date valide
+              </span>
+            </div>
+
+            <div class="kpi-input-group">
+              <label>Heure de Départ *</label>
+              <input type="time" formControlName="heure_depart" />
+              <span class="field-error" *ngIf="trajetForm.get('heure_depart')?.invalid && trajetForm.get('heure_depart')?.touched">
+                L'heure de départ est obligatoire
+              </span>
+            </div>
+
+            <div class="kpi-input-group">
+              <label>Tarif du Billet (FCFA) *</label>
+              <input type="number" formControlName="prix" placeholder="Ex: 5000" />
+              <span class="field-error" *ngIf="trajetForm.get('prix')?.invalid && trajetForm.get('prix')?.touched">
+                Le prix doit être supérieur à 0 FCFA
+              </span>
+            </div>
+
+            <!-- 🔒 CHAMP SÉLECTION DE BUS SÉCURISÉ ET OBLIGATOIRE -->
+            <div class="kpi-input-group">
+              <label>Affecter un Bus Disponible *</label>
+              <select formControlName="bus">
+                <option value="" disabled selected>-- Choisir un véhicule libre --</option>
+                <option *ngFor="let b of busDisponibles" [value]="b.id">
+                  🚌 {{ b.matricule | uppercase }} ({{ b.type_bus | uppercase }} — {{ b.capacite }} places)
+                </option>
+              </select>
+              
+              <!-- Message d'erreur de validation obligatoire -->
+              <span class="field-error" *ngIf="trajetForm.get('bus')?.invalid && trajetForm.get('bus')?.touched">
+                L'affectation d'un bus libre est strictement obligatoire pour créer la ligne.
+              </span>
+
+              <!-- Alerte si aucun véhicule n'est disponible -->
+              <p class="warning-text-select" *ngIf="busDisponibles.length === 0">
+                ⚠️ Aucun véhicule n'est disponible. Enregistrez un nouveau bus ou attendez la libération d'une flotte active.
+              </p>
+            </div>
+
+            <button type="submit" class="kpi-action-button" [disabled]="trajetForm.invalid">
+              Planifier le Trajet
+            </button>
+          </form>
+        </div>
+
+        <!-- CARTE : LISTE DES TRAJETS PROGRAMMÉS -->
+        <div class="grid-card-table">
+          <h3>Catalogue Général des Trajets</h3>
+          
+          <div class="table-wrapper" *ngIf="trajets.length > 0; else videBlock">
+            <table class="kpi-table-view">
+              <thead>
+                <tr>
+                  <th>Itinéraire</th>
+                  <th>Horaire</th>
+                  <th>Tarif</th>
+                  <th>Véhicule</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let t of trajets">
+                  <td><strong>{{ t.ville_depart }} ➔ {{ t.ville_arrivee }}</strong></td>
+                  <td>Le {{ t.date_depart }} à {{ t.heure_depart }}</td>
+                  <td><span class="text-price">{{ t.prix | number }} FCFA</span></td>
+                  <td>
+                    <span class="badge-bus">🚌 {{ t.bus_matricule || 'Véhicule n°' + t.bus }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <ng-template #videBlock>
+            <div class="vide-message">
+              <span>⚠️</span>
+              <p>Aucune programmation d'horaires en cours sur le serveur.</p>
+            </div>
+          </ng-template>
+
+        </div>
+
+      </div>
+    </div>
+  </main>
+</div>

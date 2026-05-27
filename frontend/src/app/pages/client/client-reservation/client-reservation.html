@@ -1,0 +1,290 @@
+<!-- ===== NAVBAR CLIENT PROFESSIONNELLE ===== -->
+<nav class="navbar-client shadow-sm">
+  <div class="container-fluid px-4">
+    
+    <!-- Logo -->
+    <div class="navbar-brand-wrapper">
+      <a class="navbar-brand" routerLink="/client/trajets">
+        <i class="bi bi-bus-front me-2"></i>
+        <span class="brand-text">EasyReserve</span>
+      </a>
+      <span class="badge bg-success ms-2">Espace Client</span>
+    </div>
+
+    <!-- Navigation -->
+    <div class="navbar-nav-custom">
+      <a routerLink="/client/mes-reservations" routerLinkActive="active" class="nav-item-custom">
+        <i class="bi bi-ticket-perforated-fill me-2"></i>
+        <span class="nav-text">Mes Réservations</span>
+      </a>
+      <a routerLink="/client/paiement" routerLinkActive="active" class="nav-item-custom">
+        <i class="bi bi-credit-card-2-front me-2"></i>
+        <span class="nav-text">Paiement</span>
+      </a>
+      <a routerLink="/client/trajets" routerLinkActive="active" class="nav-item-custom">
+        <i class="bi bi-search me-2"></i>
+        <span class="nav-text">Nouveaux Trajets</span>
+      </a>
+    </div>
+
+    <!-- Profil Utilisateur -->
+    <div class="navbar-user-menu">
+      <div class="user-info">
+        <div class="user-avatar">
+          <img [src]="getUserAvatar()" alt="Avatar" class="avatar-img" />
+          <span class="user-name">{{ getUserName() }}</span>
+          <i class="bi bi-chevron-down ms-2"></i>
+        </div>
+        <div class="dropdown-menu-custom">
+          <div class="dropdown-header">
+            <strong>{{ getUserName() }}</strong>
+            <small>{{ getUserEmail() }}</small>
+          </div>
+          <a routerLink="/client/profil" class="dropdown-item">
+            <i class="bi bi-person me-2"></i>Mon Profil
+          </a>
+          <a routerLink="/client/mes-reservations" class="dropdown-item">
+            <i class="bi bi-ticket-detailed me-2"></i>Mes Réservations
+          </a>
+          <a routerLink="/client/paiement" class="dropdown-item">
+            <i class="bi bi-wallet2 me-2"></i>Paiements
+          </a>
+          <div class="dropdown-divider"></div>
+          <!-- ✅ BOUTON DÉCONNEXION -->
+          <button (click)="logout()" class="dropdown-item text-danger">
+            <i class="bi bi-box-arrow-right me-2"></i>Déconnexion
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</nav>
+
+<!-- ===== CONTENU PRINCIPAL ===== -->
+<div class="main-content py-5">
+  <div class="container" style="max-width: 700px;">
+    
+    <!-- En-tête de page -->
+    <div class="text-center mb-5">
+      <h2 class="display-6 fw-bold text-primary mb-2">
+        <i class="bi bi-ticket-detailed me-2"></i>Réserver votre trajet
+      </h2>
+      <p class="text-muted">Finalisez votre réservation en quelques clics</p>
+    </div>
+
+    <!-- État de chargement -->
+    @if (loading) {
+      <div class="card shadow-sm border-0">
+        <div class="card-body text-center py-5">
+          <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+          <p class="mt-3 text-muted">Chargement des détails du trajet...</p>
+        </div>
+      </div>
+    }
+
+    <!-- Erreur -->
+    @else if (errorText) {
+      <div class="alert alert-danger d-flex align-items-center shadow-sm">
+        <i class="bi bi-exclamation-triangle me-3 fs-4"></i>
+        <div>
+          <strong>Erreur</strong><br/>
+          {{ errorText }}
+        </div>
+      </div>
+      <div class="text-center mt-4">
+        <button class="btn btn-outline-primary" (click)="cancel()">
+          <i class="bi bi-arrow-left me-2"></i>Retour aux trajets
+        </button>
+      </div>
+    }
+
+    <!-- Formulaire de réservation -->
+    @else if (trajet && !successText) {
+      <div class="card reservation-card shadow-sm border-0">
+        
+        <!-- Résumé du trajet -->
+        <div class="card-header bg-gradient-primary text-white py-4">
+          <div class="text-center">
+            <h4 class="mb-2">{{ trajet.ville_depart }} → {{ trajet.ville_arrivee }}</h4>
+            <p class="mb-0 opacity-75">
+              <i class="bi bi-calendar3 me-2"></i>{{ formatDate(trajet.date_depart) }} à {{ trajet.heure_depart }}
+            </p>
+          </div>
+        </div>
+
+        <div class="card-body p-4">
+          
+          <!-- Détails du bus -->
+          <div class="bg-light rounded p-3 mb-4">
+            <div class="row text-center">
+              <div class="col-6 border-end">
+                <small class="text-muted d-block">Bus</small>
+                <strong>{{ trajet.bus_details?.matricule || 'N/A' }}</strong>
+              </div>
+              <div class="col-6">
+                <small class="text-muted d-block">Agence</small>
+                <strong>{{ trajet.bus_details?.agence_nom || 'N/A' }}</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Formulaire -->
+          <form [formGroup]="bookingForm" (ngSubmit)="submitReservation()">
+            
+            <!-- Nombre de places -->
+            <div class="mb-4">
+              <label class="form-label fw-semibold">
+                <i class="bi bi-people me-2 text-primary"></i>Nombre de places *
+              </label>
+              <input 
+                type="number" 
+                formControlName="nombre_places" 
+                class="form-control form-control-lg" 
+                min="1" 
+                [max]="trajet.places_disponibles"
+                placeholder="Ex: 1"
+              />
+              @if (bookingForm.get('nombre_places')?.invalid && bookingForm.get('nombre_places')?.touched) {
+                <small class="text-danger">Veuillez sélectionner un nombre valide de places</small>
+              }
+              <small class="text-muted">{{ trajet.places_disponibles }} place(s) disponible(s)</small>
+            </div>
+
+            <!-- Nom du passager -->
+            <div class="mb-4">
+              <label class="form-label fw-semibold">
+                <i class="bi bi-person me-2 text-primary"></i>Nom du passager *
+              </label>
+              <input 
+                type="text" 
+                formControlName="passager_nom" 
+                class="form-control form-control-lg" 
+                placeholder="Ex: Jean Dupont"
+              />
+              @if (bookingForm.get('passager_nom')?.invalid && bookingForm.get('passager_nom')?.touched) {
+                <small class="text-danger">Nom requis (minimum 2 caractères)</small>
+              }
+            </div>
+
+            <!-- Téléphone -->
+            <div class="mb-4">
+              <label class="form-label fw-semibold">
+                <i class="bi bi-telephone me-2 text-primary"></i>Téléphone *
+              </label>
+              <input 
+                type="tel" 
+                formControlName="passager_tel" 
+                class="form-control form-control-lg" 
+                placeholder="Ex: 699123456"
+              />
+              @if (bookingForm.get('passager_tel')?.invalid && bookingForm.get('passager_tel')?.touched) {
+                <small class="text-danger">Numéro valide requis (9-15 chiffres)</small>
+              }
+            </div>
+
+            <!-- Moyen de paiement -->
+            <div class="mb-4">
+              <label class="form-label fw-semibold">
+                <i class="bi bi-wallet2 me-2 text-primary"></i>Moyen de paiement *
+              </label>
+              <select formControlName="mode_paiement" class="form-select form-select-lg">
+                <option value="orange_money">🟠 Orange Money</option>
+                <option value="mtn_momo">🟡 MTN Mobile Money</option>
+                <option value="carte">💳 Carte bancaire (simulation)</option>
+              </select>
+              <small class="text-muted">Paiement sécurisé • Transaction simulée pour le MVP</small>
+            </div>
+
+            <!-- Messages -->
+            @if (errorText) {
+              <div class="alert alert-danger mb-4">{{ errorText }}</div>
+            }
+            @if (successText) {
+              <div class="alert alert-success mb-4">{{ successText }}</div>
+            }
+
+            <!-- Résumé du total -->
+            <div class="card bg-light border-0 mb-4">
+              <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                  <span class="fw-semibold">Total à payer :</span>
+                  <span class="h4 text-success mb-0">{{ formatPrice(totalPrice) }}</span>
+                </div>
+                <small class="text-muted">{{ bookingForm.value.nombre_places }} place(s) × {{ formatPrice(trajet.prix) }}</small>
+              </div>
+            </div>
+
+            <!-- Boutons -->
+            <div class="d-grid gap-3">
+              <button 
+                type="submit" 
+                class="btn btn-primary btn-lg" 
+                [disabled]="processing || bookingForm.invalid">
+                @if (processing) {
+                  <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                  Traitement en cours...
+                } @else {
+                  <i class="bi bi-check-circle me-2"></i>Confirmer et payer {{ formatPrice(totalPrice) }}
+                }
+              </button>
+              <button type="button" class="btn btn-outline-secondary btn-lg" (click)="cancel()">
+                <i class="bi bi-x-circle me-2"></i>Annuler
+              </button>
+            </div>
+
+          </form>
+        </div>
+      </div>
+    }
+
+    <!-- Succès -->
+    @else if (successText) {
+      <div class="card shadow-sm border-0 text-center">
+        <div class="card-body py-5">
+          <div class="display-1 text-success mb-3">🎉</div>
+          <h4 class="fw-bold mb-2">Réservation confirmée !</h4>
+          <p class="text-muted mb-4">{{ successText }}</p>
+          <div class="spinner-border text-success" role="status"></div>
+          <p class="mt-3 text-muted small">Redirection vers l'historique...</p>
+        </div>
+      </div>
+    }
+
+  </div>
+</div>
+
+<!-- ===== FOOTER CLIENT EASYRESERVE ===== -->
+<footer class="footer-client">
+  <div class="container">
+    <div class="row align-items-center">
+      
+      <!-- Marque -->
+      <div class="col-md-4 text-center text-md-start mb-3 mb-md-0">
+        <a routerLink="/client/trajets" class="footer-brand">
+          <i class="bi bi-bus-front me-2"></i>EasyReserve
+        </a>
+        <small class="text-muted d-block mt-1">© 2026 Tous droits réservés</small>
+      </div>
+
+      <!-- Liens Espace Client -->
+      <div class="col-md-4 text-center mb-3 mb-md-0">
+        <small class="text-muted fw-semibold d-block mb-2">Espace Client</small>
+        <div class="footer-links">
+          <a routerLink="/client/trajets">🔍 Trajets</a>
+          <a routerLink="/client/mes-reservations">📋 Réservations</a>
+          <a routerLink="/client/paiement">💳 Paiement</a>
+        </div>
+      </div>
+
+      <!-- Déconnexion -->
+      <div class="col-md-4 text-center text-md-end">
+        <button (click)="logout()" class="btn btn-outline-danger btn-sm">
+          <i class="bi bi-box-arrow-right me-2"></i>Déconnexion
+        </button>
+        <small class="text-muted d-block mt-2">Connecté en tant que <strong>{{ getUserName() }}</strong></small>
+      </div>
+
+    </div>
+  </div>
+</footer>

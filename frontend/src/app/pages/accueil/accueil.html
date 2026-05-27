@@ -1,0 +1,149 @@
+<div class="accueil-wrapper">
+
+  <!-- NAVBAR -->
+  <nav class="navbar-top">
+    <div class="nav-brand">
+      <span class="brand-icon">🚌</span>
+      <span class="brand-name">EasyReserve</span>
+    </div>
+    <div class="nav-links">
+      <a routerLink="/login" class="btn-outline">Se connecter</a>
+      <a routerLink="/register" class="btn-filled">S'inscrire</a>
+    </div>
+  </nav>
+
+  <!-- HERO SECTION -->
+  <section class="hero-section">
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+      <div class="hero-badge">🚌 Réservation de bus en ligne</div>
+      <h1>
+        Voyagez <span class="text-gold">simplement</span><br/>
+        avec <span class="text-white">EasyReserve</span>
+      </h1>
+      <p>
+        Réservez vos billets de bus au Cameroun depuis chez vous.<br/>
+        Rapide, sécurisé et disponible 24h/24.
+      </p>
+      <div class="hero-actions">
+        <a routerLink="/register" class="btn-hero-primary">
+          Réserver maintenant →
+        </a>
+        <a routerLink="/login" class="btn-hero-secondary">
+          Se connecter
+        </a>
+      </div>
+
+      <!-- Recherche rapide -->
+      <div class="search-bar">
+        <div class="search-field">
+          <span>📍</span>
+          <input type="text" placeholder="Ville de départ" readonly/>
+        </div>
+        <div class="search-divider">→</div>
+        <div class="search-field">
+          <span>🏁</span>
+          <input type="text" placeholder="Destination" readonly/>
+        </div>
+        <a routerLink="/register" class="btn-search">Rechercher</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATS -->
+  <section class="stats-section">
+    @for (s of stats; track s.label) {
+      <div class="stat-item">
+        <span class="stat-nombre">{{ s.nombre }}</span>
+        <span class="stat-label">{{ s.label }}</span>
+      </div>
+    }
+  </section>
+
+  <!-- FONCTIONNALITÉS -->
+  <section class="features-section">
+    <div class="section-header">
+      <h2>Comment ça fonctionne ?</h2>
+      <p>Réservez votre billet en 4 étapes simples</p>
+    </div>
+    <div class="features-grid">
+      @for (f of fonctionnalites; track f.titre) {
+        <div class="feature-card">
+          <div class="feature-icon">{{ f.icon }}</div>
+          <h3>{{ f.titre }}</h3>
+          <p>{{ f.description }}</p>
+        </div>
+      }
+    </div>
+  </section>
+
+  <!-- POURQUOI EASYRESERVE -->
+  <section class="why-section">
+    <div class="why-overlay"></div>
+    <div class="why-content">
+      <h2>Pourquoi choisir EasyReserve ?</h2>
+      <div class="why-grid">
+        <div class="why-item">
+          <span>⚡</span>
+          <div>
+            <h4>Rapide et simple</h4>
+            <p>Réservez en moins de 2 minutes</p>
+          </div>
+        </div>
+        <div class="why-item">
+          <span>🔒</span>
+          <div>
+            <h4>100% Sécurisé</h4>
+            <p>Paiements et données protégés</p>
+          </div>
+        </div>
+        <div class="why-item">
+          <span>🕐</span>
+          <div>
+            <h4>Disponible 24h/24</h4>
+            <p>Réservez à tout moment</p>
+          </div>
+        </div>
+        <div class="why-item">
+          <span>📱</span>
+          <div>
+            <h4>Billet électronique</h4>
+            <p>Recevez votre billet par email</p>
+          </div>
+        </div>
+        <div class="why-item">
+          <span>❌</span>
+          <div>
+            <h4>Annulation possible</h4>
+            <p>Annulez selon les conditions</p>
+          </div>
+        </div>
+        <div class="why-item">
+          <span>💰</span>
+          <div>
+            <h4>Meilleurs tarifs</h4>
+            <p>Prix transparents sans frais cachés</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-section">
+    <h2>Prêt à voyager ?</h2>
+    <p>Créez votre compte gratuitement et réservez votre premier billet.</p>
+    <a routerLink="/register" class="btn-cta">Créer mon compte →</a>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-brand">
+      <span>🚌</span>
+      <strong>EasyReserve</strong>
+    </div>
+    <p>Plateforme de réservation de bus en ligne au Cameroun</p>
+    <p>© 2025 — Université de Yaoundé 1 · Saint Jean Ingénieur</p>
+  </footer>
+
+</div>

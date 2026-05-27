@@ -1,0 +1,195 @@
+<app-navbar></app-navbar>
+<div class="page-container">
+
+  <div class="buses-page">
+  
+  <!-- En-tête -->
+  <div class="page-header">
+    <div>
+      <h2>🚌 Gestion de la flotte</h2>
+      <p>{{ buses.length }} bus enregistré(s) — Prêts pour la planification de trajets</p>
+    </div>
+    <button class="btn-primary" (click)="toggleForm()">
+      {{ showForm ? '✕ Annuler' : '+ Nouveau bus' }}
+    </button>
+  </div>
+
+  <!-- Messages globaux -->
+  @if (successMsg) {
+    <div class="alert alert-success" role="alert">✅ {{ successMsg }}</div>
+  }
+  @if (errorMsg) {
+    <div class="alert alert-error" role="alert">❌ {{ errorMsg }}</div>
+  }
+
+  <!-- Formulaire de création -->
+  @if (showForm) {
+    <div class="form-card">
+      <h3>➕ Ajouter un nouveau bus</h3>
+      
+      <form [formGroup]="busForm" (ngSubmit)="onSubmit()" novalidate>
+        <div class="form-grid">
+          
+          <!-- Matricule -->
+          <div class="form-group">
+            <label>Matricule / Immatriculation *</label>
+            <input type="text" formControlName="matricule" class="form-control" placeholder="Ex: BUS-001-YDE"/>
+            @if (f['matricule']?.invalid && f['matricule']?.touched) {
+              <small class="error">4-20 caractères requis</small>
+            }
+          </div>
+
+          <!-- Capacité -->
+          <div class="form-group">
+            <label>Capacité (places) *</label>
+            <input type="number" formControlName="capacite" class="form-control" min="1" max="100"/>
+            @if (f['capacite']?.invalid && f['capacite']?.touched) {
+              <small class="error">1 à 100 places</small>
+            }
+          </div>
+
+          <!-- Type de bus -->
+          <div class="form-group">
+            <label>Type de véhicule *</label>
+            <select formControlName="type_bus" class="form-control">
+              <option value="standard">🚌 Standard</option>
+              <option value="vip">✨ VIP</option>
+              <option value="minibus">🚐 Minibus</option>
+            </select>
+          </div>
+
+          <!-- Agence (Admin seulement) -->
+          @if (isAdmin) {
+            <div class="form-group">
+              <label>Agence propriétaire *</label>
+              <select formControlName="agence" class="form-control">
+                <option value="">-- Sélectionner une agence --</option>
+                @for (a of agences; track a.id) {
+                  <option [value]="a.id">{{ a.nom }}</option>
+                }
+              </select>
+              @if (f['agence']?.invalid && f['agence']?.touched) {
+                <small class="error">Sélection obligatoire</small>
+              }
+            </div>
+          }
+          @if (isGestionnaire && userAgenceId) {
+            <div class="form-group">
+              <label>Agence</label>
+              <input type="text" [value]="getAgenceNom(userAgenceId)" class="form-control" disabled/>
+              <small class="hint">Votre agence est automatiquement assignée</small>
+            </div>
+          }
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" (click)="toggleForm()">Annuler</button>
+          <button type="submit" class="btn-primary" [disabled]="loading || busForm.invalid">
+            {{ loading ? '⏳ Création...' : '✅ Créer le bus' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  }
+
+  <!-- Formulaire de modification (modal style) -->
+  @if (showModifier && busAModifier) {
+    <div class="form-card">
+      <h3>✏️ Modifier — {{ busAModifier.matricule }}</h3>
+      
+      <form [formGroup]="modifForm" (ngSubmit)="sauvegarderModification()" novalidate>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Matricule *</label>
+            <input type="text" formControlName="matricule" class="form-control"/>
+            @if (m['matricule']?.invalid && m['matricule']?.touched) {
+              <small class="error">Requis</small>
+            }
+          </div>
+          <div class="form-group">
+            <label>Capacité *</label>
+            <input type="number" formControlName="capacite" class="form-control" min="1" max="100"/>
+          </div>
+          <div class="form-group">
+            <label>Type</label>
+            <select formControlName="type_bus" class="form-control">
+              <option value="standard">Standard</option>
+              <option value="vip">VIP</option>
+              <option value="minibus">Minibus</option>
+            </select>
+          </div>
+          @if (isAdmin) {
+            <div class="form-group">
+              <label>Agence</label>
+              <select formControlName="agence" class="form-control">
+                <option value="">-- Non assignée --</option>
+                @for (a of agences; track a.id) {
+                  <option [value]="a.id">{{ a.nom }}</option>
+                }
+              </select>
+            </div>
+          }
+          <div class="form-group">
+            <label>
+              <input type="checkbox" formControlName="is_active"/>
+              Bus actif
+            </label>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" (click)="toggleModifier(busAModifier!)">Annuler</button>
+          <button type="submit" class="btn-primary" [disabled]="loading || modifForm.invalid">
+            {{ loading ? '⏳ Sauvegarde...' : '💾 Sauvegarder' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  }
+
+  <!-- Liste des buses -->
+  <div class="table-container">
+    @if (loading && buses.length === 0) {
+      <div class="loading">Chargement de la flotte...</div>
+    } @else if (buses.length === 0) {
+      <div class="empty-state">
+        <span class="empty-icon">🚌</span>
+        <p>Aucun bus enregistré pour le moment.</p>
+        <button class="btn-primary" (click)="toggleForm()">+ Ajouter un premier bus</button>
+      </div>
+    } @else {
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Matricule</th>
+            <th>Type</th>
+            <th>Capacité</th>
+            <th>Agence</th>
+            <th>Statut</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (bus of buses; track bus.id) {
+            <tr>
+              <td><strong>{{ bus.matricule }}</strong></td>
+              <td><span class="badge {{ getTypeBadgeClass(bus.type_bus) }}">{{ getTypeLabel(bus.type_bus) }}</span></td>
+              <td>{{ bus.capacite }} places</td>
+              <td>{{ bus.agence_nom || 'Non assignée' }}</td>
+              <td>
+                <span [class]="bus.is_active !== false ? 'badge-active' : 'badge-inactive'">
+                  {{ bus.is_active !== false ? '✅ Actif' : '❌ Inactif' }}
+                </span>
+              </td>
+              <td class="actions">
+                <button class="btn-icon btn-edit" (click)="toggleModifier(bus)" title="Modifier">✏️</button>
+                <button class="btn-icon btn-delete" (click)="supprimerBus(bus)" title="Supprimer">🗑</button>
+                <button class="btn-icon btn-trajet" routerLink="/trajets/nouveau?bus={{ bus.id }}" title="Créer un trajet">🗓️</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+</div>

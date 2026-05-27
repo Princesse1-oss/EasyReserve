@@ -1,0 +1,58 @@
+<app-navbar></app-navbar>
+<div class="page-container">
+  <h2>Finaliser mon achat</h2>
+
+  <div *ngIf="loadingData" class="loading">Extraction des données de facturation...</div>
+
+  <div class="paiement-grid" *ngIf="!loadingData && reservation">
+    
+    <!-- Résumé du Ticket -->
+    <div class="summary-card">
+      <h3>Détails du billet</h3>
+      <div class="summary-body">
+        <p><strong>Voyage :</strong> {{ reservation.trajet_detail.ville_depart }} → {{ reservation.trajet_detail.ville_arrivee }}</p>
+        <p><strong>Départ :</strong> Le {{ reservation.trajet_detail.date_depart }} à {{ reservation.trajet_detail.heure_depart }}</p>
+        <p><strong>Place réservée :</strong> Siège N° {{ reservation.place_detail?.numero_siege }}</p>
+        <hr />
+        <div class="total-block">
+          <span>Net à mandater :</span>
+          <span class="price">{{ reservation.trajet_detail.prix }} FCFA</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Formulaire d'encaissement -->
+    <div class="form-card">
+      <h3>Mode de règlement</h3>
+      
+      <!-- Sélecteur visuel de méthode -->
+      <div class="method-selector">
+        <button type="button" [class.active]="methodeSelectionnee === 'orange_money'" (click)="changerMethode('orange_money')">🟠 Orange Money</button>
+        <button type="button" [class.active]="methodeSelectionnee === 'mtn_money'" (click)="changerMethode('mtn_money')">🟡 MTN MoMo</button>
+        <button type="button" [class.active]="methodeSelectionnee === 'carte_bancaire'" (click)="changerMethode('carte_bancaire')">💳 Carte Bancaire</button>
+      </div>
+
+      <div *ngIf="erreur" class="erreur">{{ erreur }}</div>
+      <div *ngIf="succes" class="succes">{{ succes }}</div>
+
+      <form [formGroup]="paiementForm" (ngSubmit)="onSubmit()">
+        
+        <div class="form-group" *ngIf="methodeSelectionnee !== 'carte_bancaire'">
+          <label for="telephone_paiement">Numéro de téléphone de débit</label>
+          <input id="telephone_paiement" type="text" formControlName="telephone_paiement" placeholder="Ex: 699XXXXXX" />
+        </div>
+
+        <div class="form-group">
+          <label for="transaction_id">ID de transaction / Référence Reçu</label>
+          <input id="transaction_id" type="text" formControlName="transaction_id" placeholder="Ex: TXN9823102391" />
+          <small class="hint">Saisissez l'ID de transaction reçu par SMS ou sur votre reçu.</small>
+        </div>
+
+        <button type="submit" [disabled]="paiementForm.invalid || submitting" class="btn-submit">
+          {{ submitting ? 'Traitement sécurisé...' : 'Valider le paiement de ' + reservation.trajet_detail.prix + ' FCFA' }}
+        </button>
+      </form>
+    </div>
+
+  </div>
+</div>

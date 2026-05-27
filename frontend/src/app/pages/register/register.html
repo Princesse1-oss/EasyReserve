@@ -1,0 +1,51 @@
+<div class="auth-container">
+  <div class="auth-card">
+    <h2>Créer un compte</h2>
+    <p class="subtitle">Rejoignez-nous pour simplifier vos voyages</p>
+
+    <div *ngIf="errorMessage" class="error-banner">{{ errorMessage }}</div>
+    <div *ngIf="successMessage" class="success-banner">{{ successMessage }}</div>
+
+    <form [formGroup]="registerForm" (ngSubmit)="onSubmit()">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="first_name">Prénom</label>
+          <input type="text" id="first_name" formControlName="first_name" placeholder="John" />
+        </div>
+        <div class="form-group">
+          <label for="last_name">Nom</label>
+          <input type="text" id="last_name" formControlName="last_name" placeholder="Doe" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="email">Adresse Email</label>
+        <input type="email" id="email" formControlName="email" placeholder="exemple@mail.com" />
+      </div>
+
+      <div class="form-group">
+        <label for="username">Nom d'utilisateur</label>
+        <input type="text" id="username" formControlName="username" placeholder="Ex: john_doe" />
+      </div>
+
+      <div class="form-group">
+        <label for="password">Mot de passe (8 caractères min.)</label>
+        <input type="password" id="password" formControlName="password" placeholder="••••••••" />
+      </div>
+
+      <div class="form-group">
+        <label for="password_confirm">Confirmer le mot de passe</label>
+        <input type="password" id="password_confirm" formControlName="password_confirm" placeholder="••••••••" />
+      </div>
+
+      <button type="submit" [disabled]="registerForm.invalid || isLoading" class="btn-primary">
+        <span *ngIf="!isLoading">S'inscrire</span>
+        <span *ngIf="isLoading">Création du compte...</span>
+      </button>
+    </form>
+
+    <p class="auth-footer">
+      Déjà inscrit ? <a routerLink="/login">Se connecter</a>
+    </p>
+  </div>
+</div>

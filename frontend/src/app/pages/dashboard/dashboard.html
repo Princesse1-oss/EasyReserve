@@ -1,0 +1,425 @@
+<div class="app-layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span>🚌</span>
+      <h1>REBUS</h1>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a class="nav-item" [class.active]="activeSection === 'tableau-bord'" (click)="setSection('tableau-bord')">
+        <span>📊</span> Tableau de bord
+      </a>
+      @if (user?.role === 'ADMIN') {
+        <a class="nav-item" [class.active]="activeSection === 'agences'" (click)="setSection('agences')">
+          <span>🏢</span> Agences
+        </a>
+        <a class="nav-item" [class.active]="activeSection === 'gestionnaires'" (click)="setSection('gestionnaires')">
+          <span>👥</span> Gestionnaires
+        </a>
+      }
+      @if (user?.role === 'CLIENT') {
+        <a class="nav-item" routerLink="/trajets"><span>🚌</span> Trajets</a>
+        <a class="nav-item" routerLink="/mes-reservations"><span>🎫</span> Mes réservations</a>
+      }
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <span class="user-avatar">{{ user?.username?.charAt(0)?.toUpperCase() }}</span>
+        <div>
+          <strong>{{ user?.username }}</strong>
+          <small>{{ user?.role === 'ADMIN' ? 'Administrateur' : user?.role === 'GESTIONNAIRE' ? 'Gestionnaire' : 'Client' }}</small>
+        </div>
+      </div>
+      <button class="btn-logout" (click)="onLogout()">Déconnexion</button>
+    </div>
+  </aside>
+
+  <!-- CONTENU -->
+  <main class="main-content">
+
+    <!-- ===== TABLEAU DE BORD ===== -->
+    @if (activeSection === 'tableau-bord') {
+      <div class="page-header">
+        <div>
+          <h2>Tableau de bord</h2>
+          <p>Bienvenue, {{ user?.username }} 👋</p>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card blue" (click)="setSection('agences')">
+          <div class="stat-icon">🏢</div>
+          <span class="stat-nombre">{{ agences.length }}</span>
+          <span class="stat-label">Agences</span>
+          <span class="stat-hint">Cliquer pour gérer</span>
+        </div>
+        <div class="stat-card green" (click)="setSection('gestionnaires')">
+          <div class="stat-icon">👥</div>
+          <span class="stat-nombre">{{ gestionnaires.length }}</span>
+          <span class="stat-label">Gestionnaires</span>
+          <span class="stat-hint">Cliquer pour gérer</span>
+        </div>
+        <div class="stat-card orange">
+          <div class="stat-icon">📋</div>
+          <span class="stat-nombre">{{ totalReservations }}</span>
+          <span class="stat-label">Réservations</span>
+        </div>
+        <div class="stat-card red">
+          <div class="stat-icon">❌</div>
+          <span class="stat-nombre">{{ reservationsAnnulees }}</span>
+          <span class="stat-label">Annulées</span>
+        </div>
+      </div>
+
+      <!-- Résumé agences -->
+      @if (agences.length > 0) {
+        <div class="section-card">
+          <h3>Aperçu des agences</h3>
+          <div class="agences-grid">
+            @for (a of agences.slice(0, 4); track a.id) {
+              <div class="agence-mini">
+                <span class="agence-icon">🏢</span>
+                <div>
+                  <strong>{{ a.nom }}</strong>
+                  <small>{{ a.gestionnaire_username || 'Sans gestionnaire' }}</small>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    }
+
+    <!-- ===== AGENCES ===== -->
+    @if (activeSection === 'agences' && user?.role === 'ADMIN') {
+      <div class="page-header">
+        <div>
+          <h2>Agences</h2>
+          <p>{{ agences.length }} agence(s) — {{ agencesDisponibles.length }} disponible(s)</p>
+        </div>
+        <button class="btn-primary" (click)="toggleFormAgence()">
+          {{ showFormAgence ? '✕ Annuler' : '+ Nouvelle agence' }}
+        </button>
+      </div>
+
+      <!-- Formulaire agence -->
+      @if (showFormAgence) {
+        <div class="form-container">
+          <h4>Créer une nouvelle agence</h4>
+          @if (erreurFormA) { <div class="erreur">{{ erreurFormA }}</div> }
+          @if (succesFormA) { <div class="succes">{{ succesFormA }}</div> }
+
+          <form [formGroup]="agenceForm" (ngSubmit)="creerAgence()">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Nom de l'agence *</label>
+                <input type="text" formControlName="nom" placeholder="Ex: Agence Yaoundé Centre"/>
+                @if (a_nom?.invalid && a_nom?.touched) {
+                  <span class="field-error">Minimum 3 caractères</span>
+                }
+              </div>
+              <div class="form-group">
+                <label>Adresse *</label>
+                <input type="text" formControlName="adresse" placeholder="Adresse complète"/>
+                @if (a_adresse?.invalid && a_adresse?.touched) {
+                  <span class="field-error">Champ obligatoire</span>
+                }
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Téléphone *</label>
+                <input type="tel" formControlName="telephone" placeholder="Ex: 699000000"/>
+                @if (a_telephone?.invalid && a_telephone?.touched) {
+                  <span class="field-error">9 à 15 chiffres</span>
+                }
+              </div>
+              <div class="form-group">
+                <label>Email contact</label>
+                <input type="email" formControlName="email_contact" placeholder="agence@rebus.com"/>
+              </div>
+            </div>
+            <button type="submit" class="btn-submit" [disabled]="agenceForm.invalid || loadingFormA">
+              {{ loadingFormA ? 'Création...' : 'Créer l\'agence' }}
+            </button>
+          </form>
+        </div>
+      }
+
+      <!-- Liste agences -->
+      @if (loading) {
+        <div class="loading">Chargement...</div>
+      } @else if (agences.length === 0) {
+        <div class="vide">Aucune agence créée.</div>
+      } @else {
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nom</th>
+                <th>Adresse</th>
+                <th>Téléphone</th>
+                <th>Gestionnaire</th>
+                <th>Statut</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (a of agences; track a.id) {
+                <tr>
+                  <td><strong>{{ a.nom }}</strong></td>
+                  <td>{{ a.adresse || '—' }}</td>
+                  <td>{{ a.telephone || '—' }}</td>
+                  <td>{{ a.gestionnaire_username || 'Non assigné' }}</td>
+                  <td>
+                    <span [class]="a.gestionnaire ? 'badge-assignee' : 'badge-libre'">
+                      {{ a.gestionnaire ? 'Assignée' : 'Disponible' }}
+                    </span>
+                  </td>
+                  <td class="actions-cell">
+                    <button class="btn-voir-sm" (click)="voirDetailAgence(a)">👁 Voir</button>
+                    <button class="btn-edit-sm" (click)="modifierAgence(a)">✏️ Modifier</button>
+                    <button class="btn-delete-sm" (click)="supprimerAgence(a)">🗑 Supprimer</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+
+    <!-- ===== GESTIONNAIRES ===== -->
+    @if (activeSection === 'gestionnaires' && user?.role === 'ADMIN') {
+      <div class="page-header">
+        <div>
+          <h2>Gestionnaires</h2>
+          <p>{{ gestionnaires.length }} gestionnaire(s) enregistré(s)</p>
+        </div>
+        <button class="btn-primary" (click)="toggleFormGestionnaire()">
+          {{ showFormGestionnaire ? '✕ Annuler' : '+ Nouveau gestionnaire' }}
+        </button>
+      </div>
+
+      <!-- Formulaire création gestionnaire -->
+      @if (showFormGestionnaire) {
+        <div class="form-container">
+          <h4>➕ Créer un nouveau gestionnaire</h4>
+          
+          @if (erreurFormG) { 
+            <div class="alert alert-error" role="alert">{{ erreurFormG }}</div> 
+          }
+          @if (succesFormG) { 
+            <div class="alert alert-success" role="alert" style="white-space: pre-line;">{{ succesFormG }}</div> 
+          }
+
+          <form [formGroup]="gestionnaireForm" (ngSubmit)="creerGestionnaire()" novalidate>
+            
+            <!-- ✅ Section : Identité (CHAMP first_name AJOUTÉ) -->
+            <div class="form-section">
+              <h5>👤 Informations personnelles</h5>
+              <div class="form-row">
+                <div class="form-group full-width">
+                  <label>Prénom *</label>
+                  <input type="text" formControlName="first_name" class="form-control" placeholder="Ex: Jean"/>
+                  @if (gestionnaireForm.get('first_name')?.invalid && gestionnaireForm.get('first_name')?.touched) {
+                    <small class="text-danger">Prénom requis</small>
+                  }
+                </div>
+              </div>
+            </div>
+
+            <!-- Section : Compte -->
+            <div class="form-section">
+              <h5>🔐 Identifiants de connexion</h5>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Nom d'utilisateur *</label>
+                  <input type="text" formControlName="username" class="form-control" placeholder="Ex: jean.dupont"/>
+                  @if (g_username?.invalid && g_username?.touched) {
+                    <small class="text-danger">
+                      @if (g_username?.errors?.['required']) { Requis }
+                      @else if (g_username?.errors?.['minlength']) { Minimum 3 caractères }
+                    </small>
+                  }
+                </div>
+                <div class="form-group">
+                  <label>Email professionnel *</label>
+                  <input type="email" formControlName="email" class="form-control" placeholder="jean@agence.com"/>
+                  @if (g_email?.invalid && g_email?.touched) {
+                    <small class="text-danger">
+                      @if (g_email?.errors?.['required']) { Requis }
+                      @else if (g_email?.errors?.['email']) { Email invalide }
+                    </small>
+                  }
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Téléphone *</label>
+                  <input type="tel" formControlName="telephone" class="form-control" placeholder="Ex: 699123456"/>
+                  @if (g_telephone?.invalid && g_telephone?.touched) {
+                    <small class="text-danger">
+                      @if (g_telephone?.errors?.['required']) { Requis }
+                      @else if (g_telephone?.errors?.['pattern']) { 9 à 15 chiffres }
+                    </small>
+                  }
+                </div>
+              </div>
+            </div>
+
+            <!-- Section : Agence -->
+            <div class="form-section">
+              <h5>🏢 Agence de rattachement</h5>
+              @if (agencesDisponibles.length === 0) {
+                <div class="alert alert-warning">
+                  ⚠️ Aucune agence disponible. 
+                  <a class="link" (click)="setSection('agences'); toggleFormGestionnaire()">Créer une agence d'abord</a>
+                </div>
+              } @else {
+                <div class="form-group">
+                  <label>Sélectionner une agence *</label>
+                  <select formControlName="agence_id" class="form-control">
+                    <option value="">-- Choisir une agence --</option>
+                    @for (a of agencesDisponibles; track a.id) {
+                      <option [value]="a.id">{{ a.nom }} — {{ a.adresse || 'Adresse non définie' }}</option>
+                    }
+                  </select>
+                  @if (g_agence_id?.invalid && g_agence_id?.touched) {
+                    <small class="text-danger">Veuillez sélectionner une agence</small>
+                  }
+                </div>
+              }
+            </div>
+
+            <!-- Boutons d'action -->
+            <div class="form-actions">
+              <button type="submit" class="btn-primary" 
+                      [disabled]="gestionnaireForm.invalid || loadingFormG || agencesDisponibles.length === 0">
+                @if (loadingFormG) {
+                  <span class="spinner"></span> Création en cours...
+                } @else {
+                  ✅ Créer le gestionnaire
+                }
+              </button>
+            </div>
+            
+            <small class="text-muted">
+              💡 Un mot de passe sécurisé sera généré automatiquement et envoyé par email au gestionnaire.
+            </small>
+          </form>
+        </div>
+      }
+
+      <!-- Liste gestionnaires -->
+      <div class="gestionnaires-liste">
+        @for (g of gestionnaires; track g.id) {
+          <div class="gestionnaire-card">
+            <div class="gestionnaire-avatar">{{ g.first_name.charAt(0) | uppercase }}</div>
+            <div class="gestionnaire-info">
+              <strong>{{ g.first_name }}</strong>
+              <span>@{{ g.username }}</span>
+              <span class="email">{{ g.email }}</span>
+              <span class="agence-badge">🏢 {{ getAgenceNom(g.id) }}</span>
+              <span [class]="g.is_active ? 'badge-actif' : 'badge-inactif'">
+                {{ g.is_active ? '✅ Actif' : '❌ Inactif' }}
+              </span>
+            </div>
+            <div class="gestionnaire-actions">
+              <button class="btn-voir" (click)="voirDetailGestionnaire(g)">👁 Voir activités</button>
+              <button [class]="g.is_active ? 'btn-desactiver' : 'btn-activer'" (click)="toggleActivation(g)">
+                {{ g.is_active ? '🔒 Désactiver' : '🔓 Activer' }}
+              </button>
+              <button class="btn-edit-sm" (click)="modifierGestionnaire(g)">✏️ Modifier</button>
+              <button class="btn-delete-sm" (click)="supprimerGestionnaire(g)">🗑 Supprimer</button>
+            </div>
+          </div>
+        } @empty {
+          <p class="vide">Aucun gestionnaire enregistré.</p>
+        }
+      </div>
+    } 
+
+  </main> 
+</div>
+
+<!-- MODAL MODIFIER GESTIONNAIRE -->
+@if (showModifierGestionnaire && gestionnaireAModifier) {
+  <div class="modal-overlay" (click)="fermerModifierGestionnaire()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Modifier — {{ gestionnaireAModifier.username }}</h3>
+        <button class="btn-fermer" (click)="fermerModifierGestionnaire()">✕</button>
+      </div>
+      <div class="modal-body">
+        @if (erreurModifG) { <div class="erreur">{{ erreurModifG }}</div> }
+        @if (succesModifG) { <div class="succes">{{ succesModifG }}</div> }
+        <form [formGroup]="modifGestionnaireForm" (ngSubmit)="sauvegarderModificationGestionnaire()">
+          <div class="form-row">
+            <div class="form-group"><label>Prénom *</label><input type="text" formControlName="first_name"/></div>
+            <div class="form-group"><label>Nom</label><input type="text" formControlName="last_name"/></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Username *</label><input type="text" formControlName="username"/></div>
+            <div class="form-group"><label>Email *</label><input type="email" formControlName="email"/></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Téléphone</label><input type="tel" formControlName="telephone"/></div>
+            <div class="form-group"><label><input type="checkbox" formControlName="is_active"/> Compte actif</label></div>
+          </div>
+          <button type="submit" class="btn-submit" [disabled]="modifGestionnaireForm.invalid || loadingModifG">
+            {{ loadingModifG ? 'Sauvegarde...' : 'Sauvegarder' }}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- MODAL DETAIL AGENCE -->
+@if (showDetailAgence && agenceSelectionnee) {
+  <div class="modal-overlay" (click)="fermerDetailAgence()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header"><h3>{{ agenceSelectionnee.nom }}</h3><button class="btn-fermer" (click)="fermerDetailAgence()">✕</button></div>
+      <div class="modal-body">
+        <div class="detail-section">
+          <h4>Informations</h4>
+          <p><strong>Adresse :</strong> {{ agenceSelectionnee.adresse || '—' }}</p>
+          <p><strong>Téléphone :</strong> {{ agenceSelectionnee.telephone || '—' }}</p>
+          <p><strong>Email :</strong> {{ agenceSelectionnee.email_contact || '—' }}</p>
+          <p><strong>Gestionnaire :</strong> {{ agenceSelectionnee.gestionnaire_username || 'Non assigné' }}</p>
+          <p><strong>Statut :</strong> <span [class]="agenceSelectionnee.gestionnaire ? 'badge-assignee' : 'badge-libre'">{{ agenceSelectionnee.gestionnaire ? 'Assignée' : 'Disponible' }}</span></p>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- MODAL MODIFIER AGENCE -->
+@if (showModifierAgence && agenceAModifier) {
+  <div class="modal-overlay" (click)="fermerModifierAgence()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header"><h3>Modifier — {{ agenceAModifier.nom }}</h3><button class="btn-fermer" (click)="fermerModifierAgence()">✕</button></div>
+      <div class="modal-body">
+        @if (erreurModif) { <div class="erreur">{{ erreurModif }}</div> }
+        @if (succesModif) { <div class="succes">{{ succesModif }}</div> }
+        <form [formGroup]="modifAgenceForm" (ngSubmit)="sauvegarderModificationAgence()">
+          <div class="form-row">
+            <div class="form-group"><label>Nom</label><input type="text" formControlName="nom"/></div>
+            <div class="form-group"><label>Adresse</label><input type="text" formControlName="adresse"/></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Téléphone</label><input type="tel" formControlName="telephone"/></div>
+            <div class="form-group"><label>Email contact</label><input type="email" formControlName="email_contact"/></div>
+          </div>
+          <button type="submit" class="btn-submit" [disabled]="modifAgenceForm.invalid || loadingModif">
+            {{ loadingModif ? 'Sauvegarde...' : 'Sauvegarder' }}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+}
