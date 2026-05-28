@@ -1,393 +1,308 @@
-.container-fluid {
-  max-width: 1400px;
-  margin: 0 auto;
-}
+// ===== NAVBAR CLIENT — TOPBAR COMPACTE 1 LIGNE =====
+.navbar-client {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 0.4rem 0;  // ✅ Réduit pour une ligne compacte
+  position: sticky;   // ✅ Topbar fixe en haut
+  top: 0;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 
-.hover-shadow {
-  transition: transform 0.2s, box-shadow 0.2s;
-  
-  &:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 16px rgba(0,0,0,0.1) !important;
+  .container-fluid {
+    display: flex;
+    align-items: center;  // ✅ Tout aligné verticalement sur 1 ligne
+    justify-content: space-between;
+    flex-wrap: nowrap;    // ✅ Empêche le retour à la ligne
+    gap: 0.5rem;
+  }
+
+  // ===== LOGO + BADGE "Espace Client" =====
+  .navbar-brand-wrapper {
+    display: flex;
+    flex-direction: column;  // ✅ Badge EN DESSOUS du nom
+    align-items: flex-start;
+    line-height: 1;
+
+    .navbar-brand {
+      color: white;
+      font-size: 1.1rem;     // ✅ Taille réduite pour tenir sur 1 ligne
+      font-weight: 700;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      white-space: nowrap;   // ✅ Empêche le texte de se casser
+
+      i { 
+        font-size: 1.3rem; 
+      }
+      
+      .brand-text {
+        display: inline-block;
+      }
+    }
+
+    // ✅ Badge "Espace Client" positionné SOUS le nom
+    .badge {
+      font-size: 0.65rem;
+      padding: 0.15rem 0.4rem;
+      margin-top: 2px;       // ✅ Petit espace sous le nom
+      background: rgba(255,255,255,0.2);
+      color: white;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+  }
+
+  // ===== NAVIGATION CENTRALE =====
+  .navbar-nav-custom {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;             // ✅ Espacement réduit entre les liens
+    flex: 1;
+    justify-content: center;
+
+    .nav-item-custom {
+      color: rgba(255,255,255,0.95);
+      padding: 0.35rem 0.7rem;
+      border-radius: 5px;
+      text-decoration: none;
+      font-size: 0.85rem;    // ✅ Police compacte
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      transition: background 0.2s;
+      border: none;
+      background: none;
+      cursor: pointer;
+      white-space: nowrap;
+
+      &:hover, &.active {
+        background: rgba(255,255,255,0.15);
+        color: white;
+      }
+
+      &.text-danger:hover {
+        background: rgba(220,53,69,0.2);
+        color: #fff;
+      }
+
+      i {
+        font-size: 0.9rem;
+      }
+    }
+  }
+
+  // ===== PROFIL UTILISATEUR (Avatar) =====
+  .navbar-user-menu {
+    display: flex;
+    align-items: center;
+
+    .user-info {
+      .user-avatar {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        background: rgba(255,255,255,0.15);
+        padding: 0.25rem 0.6rem;
+        border-radius: 50px;
+        cursor: pointer;
+        white-space: nowrap;
+
+        .avatar-img {
+          width: 28px;       // ✅ Avatar plus petit
+          height: 28px;
+          border-radius: 50%;
+          border: 2px solid white;
+          object-fit: cover;
+        }
+
+        .user-name {
+          color: white;
+          font-size: 0.8rem; // ✅ Nom compact
+          font-weight: 500;
+          max-width: 100px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        i {
+          color: white;
+          font-size: 0.75rem;
+        }
+      }
+    }
   }
 }
 
-.bg-gradient-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+// ===== CONTENU PRINCIPAL — ESPACEMENT AJUSTÉ =====
+.main-content {
+  padding-top: 1rem;  // ✅ Espace sous la topbar
+  background: #f8f9fa;
+  min-height: calc(100vh - 60px);  // ✅ Prend toute la hauteur moins la navbar
 }
 
-.card {
-  border-radius: 12px;
-  overflow: hidden;
+// ===== CARTES TRAJETS COMPACTES =====
+.trajet-card.compact {
+  font-size: 0.85rem;
+  transition: transform 0.2s, box-shadow 0.2s;
+  border: 1px solid #e9ecef !important;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+    border-color: #667eea !important;
+  }
+
+  .card-header {
+    font-size: 0.8rem;
+    min-height: auto;
+    background: #f8f9fa !important;
+    border-bottom: 1px solid #e9ecef !important;
+  }
+
+  .card-body {
+    padding: 0.75rem !important;
+    
+    strong {
+      font-size: 0.9rem;
+    }
+  }
+
+  .card-footer {
+    padding: 0.5rem !important;
+    min-height: auto;
+    background: #f8f9fa !important;
+    border-top: 1px solid #e9ecef !important;
+  }
 }
 
-.card-header {
-  padding: 1rem 1.25rem;
+// ===== FORMULAIRE DE RECHERCHE COMPACT =====
+.search-card {
+  background: #fff;
+  border: 1px solid #e9ecef !important;
+  
+  .card-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem !important;
+  }
+  
+  .form-label {
+    font-size: 0.8rem;
+    margin-bottom: 0.2rem !important;
+    font-weight: 500;
+  }
+  
+  .form-control-sm {
+    font-size: 0.85rem;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid #dee2e6;
+    
+    &:focus {
+      border-color: #667eea;
+      box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+    }
+  }
+  
+  .btn-sm {
+    font-size: 0.85rem;
+    padding: 0.3rem 0.5rem;
+  }
 }
 
+// ===== BADGES & ÉLÉMENTS =====
+.badge {
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+.badge.places-badge {
+  font-size: 0.75rem;
+  padding: 0.3rem 0.5rem;
+}
+
+// ===== BOUTONS =====
 .btn-primary {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border: none;
   
   &:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+    background: linear-gradient(135deg, #556cd6 0%, #66489e 100%);
+    transform: translateY(-1px);
   }
-}
-
-.badge {
-  padding: 0.5em 0.8em;
-  font-size: 0.85rem;
-}
-
-footer {
-  border-top: 1px solid #dee2e6;
   
-  .nav-link {
-    color: #6c757d;
-    transition: color 0.2s;
-    
-    &:hover {
-      color: #667eea;
-    }
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 }
 
-// Responsive
-@media (max-width: 768px) {
-  .btn-group {
-    flex-direction: column;
-    width: 100%;
-    
-    .btn {
-      margin-bottom: 0.5rem;
-    }
-  }
-}
-// ===== NAVBAR PROFESSIONNELLE =====
-.navbar-client {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 0.75rem 0;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-  position: sticky;
-  top: 0;
-  z-index: 1030;
-
-  .container-fluid {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  // Logo & Marque
-  .navbar-brand-wrapper {
-    display: flex;
-    align-items: center;
-    
-    .navbar-brand {
-      color: white;
-      font-size: 1.5rem;
-      font-weight: 700;
-      text-decoration: none;
-      display: flex;
-      align-items: center;
-      margin: 0;
-      
-      &:hover {
-        color: rgba(255,255,255,0.9);
-      }
-
-      i {
-        font-size: 2rem;
-      }
-    }
-  }
-
-  // Navigation Centrale
-  .navbar-nav-custom {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-
-    .nav-item-custom {
-      color: rgba(255,255,255,0.9);
-      padding: 0.75rem 1.5rem;
-      border-radius: 8px;
-      text-decoration: none;
-      transition: all 0.3s ease;
-      display: flex;
-      align-items: center;
-      font-weight: 500;
-
-      &:hover, &.active {
-        background: rgba(255,255,255,0.2);
-        color: white;
-        transform: translateY(-2px);
-      }
-
-      i {
-        font-size: 1.2rem;
-      }
-
-      .nav-text {
-        font-size: 0.95rem;
-      }
-    }
-  }
-
-  // Menu Utilisateur
-  .navbar-user-menu {
-    .user-info {
-      position: relative;
-
-      .user-avatar {
-        display: flex;
-        align-items: center;
-        background: rgba(255,255,255,0.2);
-        padding: 0.5rem 1rem;
-        border-radius: 50px;
-        cursor: pointer;
-        transition: all 0.3s ease;
-
-        &:hover {
-          background: rgba(255,255,255,0.3);
-        }
-
-        .avatar-img {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          border: 2px solid white;
-          margin-right: 0.75rem;
-        }
-
-        .user-name {
-          color: white;
-          font-weight: 600;
-          font-size: 0.95rem;
-        }
-
-        i {
-          color: white;
-          margin-left: 0.5rem;
-        }
-      }
-
-      .dropdown-menu-custom {
-        position: absolute;
-        top: calc(100% + 10px);
-        right: 0;
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-        min-width: 250px;
-        padding: 0.5rem 0;
-        z-index: 1000;
-
-        .dropdown-header {
-          padding: 1rem 1.25rem;
-          border-bottom: 1px solid #e9ecef;
-          margin-bottom: 0.5rem;
-
-          strong {
-            display: block;
-            color: #2c3e50;
-            font-size: 1rem;
-            margin-bottom: 0.25rem;
-          }
-
-          small {
-            color: #7f8c8d;
-            font-size: 0.85rem;
-          }
-        }
-
-        .dropdown-item {
-          padding: 0.75rem 1.25rem;
-          color: #2c3e50;
-          text-decoration: none;
-          transition: all 0.2s;
-          display: flex;
-          align-items: center;
-
-          &:hover {
-            background: #f8f9fa;
-            color: #667eea;
-            padding-left: 1.5rem;
-          }
-
-          i {
-            font-size: 1.1rem;
-            margin-right: 0.75rem;
-          }
-        }
-
-        .dropdown-divider {
-          margin: 0.5rem 0;
-          border-color: #e9ecef;
-        }
-      }
-    }
-  }
-}
-
-// ===== CONTENU PRINCIPAL =====
-.main-content {
-  background: #f8f9fa;
-  min-height: calc(100vh - 80px);
-  padding-bottom: 3rem;
-}
-
-// ===== CARTE DE RECHERCHE =====
-.search-card {
-  border: none;
-  border-radius: 16px;
-  background: white;
-
-  .card-title {
-    color: #2c3e50;
-    font-weight: 600;
-  }
-
-  .form-control-lg {
-    border-radius: 10px;
-    border: 2px solid #e9ecef;
-    padding: 0.75rem 1rem;
-
-    &:focus {
-      border-color: #667eea;
-      box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
-    }
-  }
-
-  .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border: none;
-    border-radius: 10px;
-    font-weight: 600;
-
-    &:hover:not(:disabled) {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-    }
-  }
-}
-
-// ===== CARTES DE TRAJET =====
-.trajet-card {
-  border: none;
-  border-radius: 16px;
-  overflow: hidden;
-  transition: all 0.3s ease;
-
-  &:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 12px 24px rgba(0,0,0,0.1) !important;
-  }
-
-  .card-header-custom {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    padding: 1.25rem;
-    color: white;
-
-    .bus-type {
-      font-weight: 600;
-      font-size: 1rem;
-    }
-
-    .places-badge {
-      background: rgba(255,255,255,0.2);
-      color: white;
-      padding: 0.4rem 0.8rem;
-      border-radius: 20px;
-    }
-  }
-
-  .card-body {
-    padding: 1.5rem;
-
-    .trajet-route {
-      h5 {
-        font-weight: 700;
-      }
-    }
-
-    .trajet-details {
-      p {
-        font-size: 0.95rem;
-        color: #5a6c7d;
-
-        i {
-          width: 20px;
-        }
-      }
-    }
-
-    .trajet-price {
-      h3 {
-        font-weight: 700;
-      }
-    }
-  }
-
-  .card-footer-custom {
-    padding: 1.25rem;
-    background: #f8f9fa;
-    border-top: 1px solid #e9ecef;
-
-    .btn-primary {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border: none;
-      border-radius: 10px;
-      font-weight: 600;
-
-      &:hover:not(:disabled) {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-      }
-    }
-  }
-}
-
-// ===== RESPONSIVE =====
+// ===== RESPONSIVE — GARDE 1 LIGNE SUR MOBILE =====
 @media (max-width: 992px) {
+  .navbar-client .container-fluid {
+    flex-wrap: nowrap;  // ✅ Force 1 ligne même sur tablette
+    gap: 0.3rem;
+    padding: 0 0.5rem;
+  }
+  
+  .navbar-brand-wrapper .navbar-brand {
+    font-size: 1rem;    // ✅ Encore plus compact
+    i { font-size: 1.15rem; }
+  }
+  
+  .navbar-brand-wrapper .badge {
+    font-size: 0.6rem;
+    padding: 0.1rem 0.3rem;
+  }
+  
+  .navbar-nav-custom {
+    display: none;  // ✅ Cache le menu central sur mobile (garde l'avatar)
+  }
+  
+  .navbar-user-menu .user-avatar .user-name {
+    display: none;  // ✅ Cache le nom, garde juste l'avatar sur mobile
+  }
+}
+
+@media (max-width: 576px) {
   .navbar-client {
-    .container-fluid {
-      flex-wrap: wrap;
-    }
-
-    .navbar-nav-custom {
-      order: 3;
-      width: 100%;
-      margin-top: 1rem;
-      justify-content: center;
-
-      .nav-item-custom {
-        padding: 0.5rem 1rem;
-        font-size: 0.9rem;
-      }
-    }
-
-    .navbar-user-menu {
-      order: 2;
+    padding: 0.3rem 0;
+  }
+  
+  .navbar-brand-wrapper .navbar-brand {
+    font-size: 0.95rem;
+    i { font-size: 1.1rem; }
+  }
+  
+  .trajet-card.compact {
+    font-size: 0.8rem;
+    
+    .card-body {
+      padding: 0.5rem !important;
     }
   }
 }
 
-@media (max-width: 768px) {
-  .navbar-client {
-    .navbar-brand {
-      font-size: 1.2rem;
-    }
+// ===== ACCESSIBILITÉ =====
+.btn:focus-visible,
+.nav-item-custom:focus-visible,
+.user-avatar:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
 
-    .navbar-nav-custom {
-      flex-direction: column;
-    }
+// ===== ANIMATIONS DOUCES =====
+.trajet-card {
+  animation: fadeIn 0.3s ease-out;
+}
 
-    .user-avatar {
-      .user-name {
-        display: none;
-      }
-    }
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

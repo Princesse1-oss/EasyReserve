@@ -6,22 +6,46 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { environment } from '../../../../environments/environment';
 import { AuthService } from '../../../services/auth.service';
 
+export interface ReservationSummary {
+  id: number;
+  trajet?: { id: number; ville_depart: string; ville_arrivee: string; date_depart: string; heure_depart: string; prix: number; };
+  trajet_detail?: { id: number; ville_depart: string; ville_arrivee: string; date_depart: string; heure_depart: string; prix: number; };
+  nombre_places: number;
+  passager_nom: string;
+  passager_tel: string;
+  statut: string;
+  created_at?: string;
+}
+
+export interface TrajetDetail {
+  id: number;
+  ville_depart: string;
+  ville_arrivee: string;
+  date_depart: string;
+  heure_depart: string;
+  prix: number;
+  places_disponibles: number;
+  bus_details?: { matricule: string; type_bus: string; agence_nom?: string; };
+}
+
 @Component({
   selector: 'app-client-reservation',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink],
   templateUrl: './client-reservation.html',
   styleUrl: './client-reservation.scss'
 })
 export class ClientReservation implements OnInit {
   private readonly apiUrl = environment.apiUrl;
   bookingForm!: FormGroup;
-  trajet: any = null;
+  trajet: TrajetDetail | null = null;
+  reservationsHistory: ReservationSummary[] = [];
   loading = true;
   processing = false;
   errorText = '';
   successText = '';
   trajetId: number | null = null;
+  mode: 'reservation' | 'historique' = 'reservation';
 
   constructor(
     private route: ActivatedRoute,
@@ -37,18 +61,21 @@ export class ClientReservation implements OnInit {
       return;
     }
 
-    this.trajetId = Number(this.route.snapshot.paramMap.get('id'));
+    const trajetIdParam = this.route.snapshot.paramMap.get('id');
     
-    if (this.trajetId) {
+    if (trajetIdParam) {
+      this.mode = 'reservation';
+      this.trajetId = Number(trajetIdParam);
       this.loadTripDetails(this.trajetId);
     } else {
-      this.router.navigate(['/client/trajets']);
+      this.mode = 'historique';
+      this.loadReservationHistory();
     }
   }
 
   loadTripDetails(id: number): void {
     this.loading = true;
-    this.http.get<any>(`${this.apiUrl}/trajets/${id}/`).subscribe({
+    this.http.get<TrajetDetail>(`${this.apiUrl}/trajets/${id}/`).subscribe({
       next: (data) => {
         this.trajet = data;
         this.initForm();
@@ -62,8 +89,36 @@ export class ClientReservation implements OnInit {
     });
   }
 
+  loadReservationHistory(): void {
+    this.loading = true;
+    const user = this.auth.getCurrentUser();
+    
+    if (!user?.id) {
+      this.errorText = 'Utilisateur non authentifié.';
+      this.loading = false;
+      return;
+    }
+
+    this.http.get<ReservationSummary[] | { results?: ReservationSummary[] }>(
+      `${this.apiUrl}/reservations/`,
+      { params: { client: user.id.toString() } }
+    ).subscribe({
+      next: (response) => {
+        const data = Array.isArray(response) ? response : (response as { results?: ReservationSummary[] })?.results || [];
+        this.reservationsHistory = data;
+        this.loading = false;
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error('Erreur chargement historique:', err);
+        this.errorText = 'Impossible de charger vos réservations.';
+        this.loading = false;
+      }
+    });
+  }
+
   private initForm(): void {
-    const maxPlaces = this.trajet?.places_disponibles || 1;
+    if (!this.trajet) return;
+    const maxPlaces = this.trajet.places_disponibles || 1;
     this.bookingForm = this.fb.group({
       nombre_places: [1, [Validators.required, Validators.min(1), Validators.max(maxPlaces)]],
       passager_nom: ['', [Validators.required, Validators.minLength(2)]],
@@ -72,6 +127,7 @@ export class ClientReservation implements OnInit {
     });
   }
 
+  // ✅ MÉTHODE PRINCIPALE : Création réservation + redirection vers paiement
   submitReservation(): void {
     if (this.bookingForm.invalid || !this.trajet) {
       this.bookingForm.markAllAsTouched();
@@ -88,18 +144,22 @@ export class ClientReservation implements OnInit {
       passager_nom: this.bookingForm.value.passager_nom.trim(),
       passager_tel: this.bookingForm.value.passager_tel.trim(),
       mode_paiement: this.bookingForm.value.mode_paiement,
-      statut: 'confirmee'
+      statut: 'en_attente'
     };
 
     console.log('📤 Payload réservation:', payload);
 
-    this.http.post<any>(`${this.apiUrl}/reservations/`, payload).subscribe({
+    this.http.post<{ id: number }>(`${this.apiUrl}/reservations/`, payload).subscribe({
       next: (reservation) => {
         console.log('✅ Réservation créée:', reservation);
-        this.successText = '🎉 Réservation confirmée ! Redirection...';
+        this.successText = '🎉 Réservation confirmée ! Redirection vers le paiement...';
+        
+        // ✅ REDIRECTION VERS CLIENT-PAIEMENT AVEC L'ID DE LA RÉSERVATION
         setTimeout(() => {
-          this.router.navigate(['/client/mes-reservations']);
-        }, 2000);
+          this.router.navigate(['/client/paiement'], { 
+            queryParams: { reservationId: reservation.id } 
+          });
+        }, 1500);
       },
       error: (err: HttpErrorResponse) => {
         console.error('❌ Erreur réservation:', err);
@@ -126,7 +186,6 @@ export class ClientReservation implements OnInit {
     });
   }
 
-  // ✅ MÉTHODES UTILISATEUR & DÉCONNEXION
   getUserName(): string {
     const user = this.auth.getCurrentUser();
     return user?.first_name || user?.username || 'Client';
@@ -149,7 +208,6 @@ export class ClientReservation implements OnInit {
     }
   }
 
-  // ✅ UTILITAIRES D'AFFICHAGE
   formatDate(dateStr: string): string {
     if (!dateStr) return '';
     const date = new Date(dateStr);
@@ -163,6 +221,10 @@ export class ClientReservation implements OnInit {
   get totalPrice(): number {
     if (!this.trajet || !this.bookingForm?.value?.nombre_places) return 0;
     return this.trajet.prix * this.bookingForm.value.nombre_places;
+  }
+
+  goToTrajets(): void {
+    this.router.navigate(['/client/trajets']);
   }
 
   cancel(): void {

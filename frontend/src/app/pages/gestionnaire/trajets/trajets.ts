@@ -3,9 +3,9 @@ import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
-import { environment } from '../../../environments/environment';
-import { AuthService } from '../../services/auth.service';
-import { Navbar } from '../../components/navbar/navbar';
+import { environment } from '../../../../environments/environment';
+import { AuthService } from '../../../services/auth.service';
+import { Navbar } from '../../../components/navbar/navbar';
 
 interface Trajet {
   id: number;

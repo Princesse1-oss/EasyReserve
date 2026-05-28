@@ -1,13 +1,12 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Router, RouterLink } from '@angular/router';
 import { environment } from '../../../../environments/environment';
 import { AuthService } from '../../../services/auth.service';
 
-
-interface Trajet {
+export interface Trajet {
   id: number;
   ville_depart: string;
   ville_arrivee: string;
@@ -67,13 +66,14 @@ export class ClientTrajets implements OnInit {
     if (date_depart) params.date_depart = date_depart;
     params.places_disponibles__gt = 0;
 
-    this.http.get<any>(`${this.apiUrl}/trajets/`, { params }).subscribe({
-      next: (data) => {
-        this.trajets = data?.results || data || [];
+    this.http.get<{ results?: Trajet[] } | Trajet[]>(`${this.apiUrl}/trajets/`, { params }).subscribe({
+      next: (response) => {
+        const data = Array.isArray(response) ? response : response?.results || [];
+        this.trajets = data;
         this.loading = false;
         this.searched = true;
       },
-      error: (err) => {
+      error: (err: HttpErrorResponse) => {
         console.error('Erreur chargement trajets:', err);
         this.trajets = [];
         this.loading = false;
@@ -92,11 +92,17 @@ export class ClientTrajets implements OnInit {
     this.loadTrajets();
   }
 
+  // ✅ MÉTHODE DE RÉSERVATION — Vérifie que l'ID est bien passé
   goToReservation(trajetId: number): void {
+    if (!trajetId) {
+      console.error('❌ trajetId is undefined or null');
+      return;
+    }
+    console.log('🎫 Navigating to reservation for trajet ID:', trajetId);
     this.router.navigate(['/client/reservation', trajetId]);
   }
 
-  // ✅ MÉTHODES POUR AFFICHER LES INFOS UTILISATEUR
+  // ✅ Méthodes utilisateur pour la navbar
   getUserName(): string {
     const user = this.auth.getCurrentUser();
     return user?.first_name || user?.username || 'Client';
@@ -108,7 +114,6 @@ export class ClientTrajets implements OnInit {
   }
 
   getUserAvatar(): string {
-    // Génère un avatar avec les initiales ou retourne une image par défaut
     const user = this.auth.getCurrentUser();
     const initials = user?.first_name?.charAt(0) || user?.username?.charAt(0) || 'C';
     return `https://ui-avatars.com/api/?name=${initials}&background=667eea&color=fff&size=128`;

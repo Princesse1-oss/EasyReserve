@@ -6,23 +6,31 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { environment } from '../../../../environments/environment';
 import { AuthService } from '../../../services/auth.service';
 
+export interface ReservationSummary {
+  id: number;
+  trajet?: { id: number; ville_depart: string; ville_arrivee: string; date_depart: string; heure_depart: string; prix: number; };
+  trajet_detail?: { id: number; ville_depart: string; ville_arrivee: string; date_depart: string; heure_depart: string; prix: number; };
+  nombre_places: number;
+  passager_nom: string;
+  passager_tel: string;
+  statut: string;
+}
+
 @Component({
   selector: 'app-client-paiement',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink],
   templateUrl: './client-paiement.html',
   styleUrl: './client-paiement.scss'
 })
 export class ClientPaiement implements OnInit {
   private readonly apiUrl = environment.apiUrl;
   paiementForm!: FormGroup;
-  reservation: any = null;
+  reservation: ReservationSummary | null = null;
   loading = true;
   processing = false;
   success = false;
   errorText = '';
-  
-  // ✅ Valeurs exactement comme définies dans le backend (METHODE_CHOICES)
   selectedMethod: 'orange_money' | 'mtn_momo' | 'carte' = 'orange_money';
 
   constructor(
@@ -34,23 +42,26 @@ export class ClientPaiement implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    // ✅ Vérification authentification
     if (!this.auth.isLoggedIn()) {
       this.router.navigate(['/login'], { queryParams: { return: this.router.url } });
       return;
     }
 
     const resId = this.route.snapshot.queryParamMap.get('reservationId');
+    
     if (resId) {
+      // ✅ Mode normal : paiement d'une réservation spécifique
       this.loadReservationSummary(Number(resId));
     } else {
+      // ✅ Fallback : pas d'ID → redirection vers les trajets
+      console.warn('⚠️ Accès à /client/paiement sans reservationId. Redirection...');
       this.router.navigate(['/client/trajets']);
     }
   }
 
   loadReservationSummary(id: number): void {
     this.loading = true;
-    this.http.get<any>(`${this.apiUrl}/reservations/${id}/`).subscribe({
+    this.http.get<ReservationSummary>(`${this.apiUrl}/reservations/${id}/`).subscribe({
       next: (data) => {
         this.reservation = data;
         this.initForm();
@@ -67,17 +78,12 @@ export class ClientPaiement implements OnInit {
 
   private initForm(): void {
     this.paiementForm = this.fb.group({
-      // ✅ transaction_id optionnel pour le MVP (simulé par le backend)
       transaction_id: [''],
-      // ✅ Téléphone requis seulement pour Mobile Money
       telephone_paiement: ['', [Validators.required, Validators.pattern(/^[0-9]{9,15}$/)]]
     });
-    
-    // Mise à jour des validateurs selon la méthode sélectionnée
     this.updatePhoneValidation();
   }
 
-  // ✅ Change la méthode de paiement et adapte la validation
   setMethod(method: 'orange_money' | 'mtn_momo' | 'carte'): void {
     this.selectedMethod = method;
     this.updatePhoneValidation();
@@ -85,19 +91,15 @@ export class ClientPaiement implements OnInit {
 
   private updatePhoneValidation(): void {
     const phoneControl = this.paiementForm.get('telephone_paiement');
-    
     if (this.selectedMethod === 'carte') {
-      // Carte bancaire : téléphone non requis
       phoneControl?.clearValidators();
       phoneControl?.setValue(null);
     } else {
-      // Mobile Money : téléphone requis et validé
       phoneControl?.setValidators([Validators.required, Validators.pattern(/^[0-9]{9,15}$/)]);
     }
     phoneControl?.updateValueAndValidity();
   }
 
-  // ✅ Soumission du paiement
   processPayment(): void {
     if (this.paiementForm.invalid || !this.reservation) {
       this.paiementForm.markAllAsTouched();
@@ -108,7 +110,6 @@ export class ClientPaiement implements OnInit {
     this.errorText = '';
     this.success = false;
 
-    // ✅ Calcul du montant total : prix × nombre de places
     const prixUnitaire = this.reservation.trajet?.prix || this.reservation.trajet_detail?.prix || 0;
     const nombrePlaces = this.reservation.nombre_places || 1;
     const montantTotal = prixUnitaire * nombrePlaces;
@@ -125,13 +126,12 @@ export class ClientPaiement implements OnInit {
 
     console.log('📤 Payload paiement:', payload);
 
-    this.http.post<any>(`${this.apiUrl}/paiements/`, payload).subscribe({
+    this.http.post<{ id?: number; detail?: string }>(`${this.apiUrl}/paiements/`, payload).subscribe({
       next: (response) => {
         console.log('✅ Paiement enregistré:', response);
         this.processing = false;
         this.success = true;
         
-        // ✅ Redirection vers l'historique après succès
         setTimeout(() => {
           this.router.navigate(['/client/mes-reservations']);
         }, 2500);
@@ -140,7 +140,6 @@ export class ClientPaiement implements OnInit {
         console.error('❌ Erreur paiement:', err);
         this.processing = false;
         
-        // ✅ Gestion précise des erreurs
         if (err.status === 0) {
           this.errorText = '🔌 Serveur injoignable. Vérifiez votre connexion.';
         } else if (err.error?.montant) {
@@ -160,7 +159,6 @@ export class ClientPaiement implements OnInit {
     });
   }
 
-  // ✅ MÉTHODES UTILISATEUR & DÉCONNEXION
   getUserName(): string {
     const user = this.auth.getCurrentUser();
     return user?.first_name || user?.username || 'Client';
@@ -177,14 +175,12 @@ export class ClientPaiement implements OnInit {
     return `https://ui-avatars.com/api/?name=${initials}&background=667eea&color=fff&size=128`;
   }
 
-  // ✅ MÉTHODE DÉCONNEXION
   logout(): void {
     if (confirm('Voulez-vous vraiment vous déconnecter ?')) {
       this.auth.logout();
     }
   }
 
-  // ===== UTILITAIRES =====
   formatPrice(price: number): string {
     return new Intl.NumberFormat('fr-FR').format(price) + ' FCFA';
   }
@@ -202,6 +198,5 @@ export class ClientPaiement implements OnInit {
     }
   }
 
-  // Getter pour les messages d'erreur de validation
   get f() { return this.paiementForm.controls; }
 }

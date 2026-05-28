@@ -2,8 +2,8 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-import { environment } from '../../../environments/environment';
-import { AuthService, User } from '../../services/auth.service'; 
+import { environment } from '../../../../environments/environment';
+import { AuthService, User } from '../../../services/auth.service'; 
 
 
 @Component({

@@ -3,17 +3,17 @@ import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
-import { environment } from '../../../environments/environment';
-import { AuthService } from '../../services/auth.service';
-import { Navbar } from "../../components/navbar/navbar";
+import { environment } from '../../../../environments/environment';
+import { AuthService } from '../../../services/auth.service';
+import { Navbar } from "../../../components/navbar/navbar";
 
-// ✅ Interfaces avec typage strict (pas de undefined non géré)
+// ✅ Interfaces avec typage strict
 interface Bus {
   id: number;
   matricule: string;
   capacite: number;
   type_bus: 'standard' | 'vip' | 'minibus';
-  agence: number | null;  // ✅ Pas de undefined ici
+  agence: number | null;
   agence_nom?: string;
   is_active?: boolean;
 }
@@ -23,6 +23,13 @@ interface Agence {
   nom: string;
   adresse?: string;
   gestionnaire?: number | null;
+}
+
+interface BusCreateRequest {
+  matricule: string;
+  capacite: number;
+  type_bus: 'standard' | 'vip' | 'minibus';
+  agence?: number; // Optionnel : si omis, Django utilise null
 }
 
 @Component({
@@ -58,7 +65,8 @@ export class GestionnaireBuses implements OnInit {
   get user() { return this.authService.getCurrentUser(); }
   get isAdmin() { return this.user?.role === 'ADMIN'; }
   get isGestionnaire() { return this.user?.role === 'GESTIONNAIRE'; }
-  // ✅ Gestion sécurisée de userAgenceId (jamais undefined)
+  
+  // ✅ Gestion sécurisée de userAgenceId
   get userAgenceId(): number | null { 
     const id = this.user?.agence_id; 
     return (id !== undefined && id !== null) ? Number(id) : null; 
@@ -73,60 +81,62 @@ export class GestionnaireBuses implements OnInit {
   }
 
   private initForms(): void {
-    // ✅ Valeur par défaut pour agence : null (pas undefined)
     const defaultAgence = this.isGestionnaire ? this.userAgenceId : null;
     
     this.busForm = this.fb.group({
       matricule: ['', [Validators.required, Validators.minLength(4), Validators.maxLength(20)]],
       capacite: [45, [Validators.required, Validators.min(1), Validators.max(100)]],
       type_bus: ['standard', Validators.required],
-      agence: [defaultAgence]  // ✅ Initialisé à null ou number, jamais undefined
+      agence: [defaultAgence]
     });
 
     this.modifForm = this.fb.group({
       matricule: ['', [Validators.required, Validators.minLength(4)]],
       capacite: [45, [Validators.required, Validators.min(1), Validators.max(100)]],
       type_bus: ['standard', Validators.required],
-      agence: [null],  // ✅ Toujours null par défaut
+      agence: [null],
       is_active: [true]
+    });
+
+    // ✅ Désactiver le champ agence pour les gestionnaires (dès l'init)
+    if (this.isGestionnaire && this.userAgenceId) {
+      this.busForm.get('agence')?.disable();
+      this.modifForm.get('agence')?.disable();
+    }
+  }
+
+  loadBuses(): void {
+    this.loading = true;
+    this.errorMsg = '';
+
+    this.http.get<Bus[] | { results: Bus[] }>(`${this.apiUrl}/bus/`).subscribe({
+      next: (response) => {
+        const dataArray = Array.isArray(response) 
+          ? response 
+          : (response as { results?: Bus[] })?.results || [];
+        
+        this.buses = dataArray;
+        this.loading = false;
+        console.log('✅ Buses chargés :', this.buses.length);
+      },
+      error: (err) => {
+        this.loading = false;
+        this.errorMsg = 'Impossible de charger la liste des bus.';
+        console.error('❌ Erreur chargement buses:', err);
+      }
     });
   }
 
-loadBuses(): void {
-  this.loading = true;
-  this.errorMsg = '';
-
-  this.http.get<any>(`${this.apiUrl}/bus/`).subscribe({
-    next: (response) => {
-      // ✅ Extraction sécurisée du format Django REST Framework
-      const dataArray = response?.results 
-        ? response.results 
-        : (Array.isArray(response) ? response : []);
-      
-      this.buses = dataArray;
-      this.loading = false;
-      
-      console.log('✅ Buses chargés en mémoire :', this.buses.length);
-    },
-    error: (err) => {
-      this.loading = false;
-      this.errorMsg = 'Impossible de charger la liste des bus.';
-      console.error('Erreur chargement:', err);
-    }
-  });
-}
-
   loadAgences(): void {
-    this.http.get<any>(`${this.apiUrl}/agences/`).subscribe({
+    this.http.get<Agence[] | { results: Agence[] }>(`${this.apiUrl}/agences/`).subscribe({
       next: (data) => {
-        this.agences = Array.isArray(data) ? data : data?.results || [];
+        this.agences = Array.isArray(data) ? data : (data as { results?: Agence[] })?.results || [];
       },
-      error: (err) => console.error('Erreur agences:', err)
+      error: (err) => console.error('❌ Erreur chargement agences:', err)
     });
   }
 
   getAgenceNom(agenceId: number | null | undefined): string {
-    // ✅ Gestion de undefined → null
     if (!agenceId) return 'Non assignée';
     const agence = this.agences.find(a => a.id === agenceId);
     return agence?.nom || 'Agence inconnue';
@@ -146,7 +156,7 @@ loadBuses(): void {
       agence: defaultAgence 
     });
     
-    // ✅ Désactiver le champ agence pour les gestionnaires
+    // ✅ Ré-appliquer l'état disabled après reset
     if (this.isGestionnaire && this.userAgenceId) {
       this.busForm.get('agence')?.disable();
     } else {
@@ -165,16 +175,19 @@ loadBuses(): void {
       matricule: bus.matricule,
       capacite: bus.capacite,
       type_bus: bus.type_bus,
-      agence: bus.agence ?? null,  // ✅ Convertir undefined en null
+      agence: bus.agence ?? null,
       is_active: bus.is_active ?? true
     });
     
+    // ✅ Ré-appliquer l'état disabled après patch
     if (this.isGestionnaire) {
       this.modifForm.get('agence')?.disable();
+    } else {
+      this.modifForm.get('agence')?.enable();
     }
   }
 
-  // ===== CRÉATION — CORRECTION PRINCIPALE =====
+  // ===== CRÉATION — PAYLOAD SÉCURISÉ =====
   onSubmit(): void {
     if (this.busForm.invalid) {
       this.busForm.markAllAsTouched();
@@ -188,31 +201,36 @@ loadBuses(): void {
 
     const rawValue = this.busForm.getRawValue();
     
-    // ✅ Construction sécurisée du payload
-    const payload: any = {
+    // ✅ Construction typée du payload
+    const payload: BusCreateRequest = {
       matricule: String(rawValue.matricule || '').trim(),
       capacite: Number(rawValue.capacite),
-      type_bus: String(rawValue.type_bus || 'standard')
+      type_bus: rawValue.type_bus as 'standard' | 'vip' | 'minibus'
     };
 
-    // ✅ Gestion de l'agence : seulement si valeur valide (number), sinon on omet le champ
+    // ✅ Ajouter agence seulement si valeur valide (number)
     const agenceValue = rawValue.agence;
-    if (agenceValue !== null && agenceValue !== undefined && agenceValue !== '') {
-      payload.agence = Number(agenceValue);  // ✅ Force le type number
+    if (typeof agenceValue === 'number' && agenceValue > 0) {
+      payload.agence = agenceValue;
     }
-    // Si agence est null/undefined/'' → on ne l'envoie PAS (Django gère le null par défaut)
+    // Si agence est null/undefined/'' → on omet le champ (Django utilisera null)
 
-    console.log('📤 Payload envoyé:', JSON.stringify(payload));
+    console.log('📤 Payload création bus:', JSON.stringify(payload));
 
     this.http.post<Bus>(`${this.apiUrl}/bus/`, payload).subscribe({
       next: (response) => {
         this.loading = false;
         this.successMsg = `✅ Bus "${response.matricule}" créé avec succès !`;
+        
         this.busForm.reset({ 
           capacite: 45, 
           type_bus: 'standard', 
           agence: this.isGestionnaire ? this.userAgenceId : null 
         });
+        if (this.isGestionnaire && this.userAgenceId) {
+          this.busForm.get('agence')?.disable();
+        }
+        
         this.showForm = false;
         this.loadBuses();
         setTimeout(() => this.successMsg = '', 4000);
@@ -220,11 +238,10 @@ loadBuses(): void {
       error: (err: HttpErrorResponse) => {
         this.loading = false;
         console.error('❌ Erreur création bus:', err);
-        console.error('🔍 Réponse backend:', err.error);  // ✅ Voir les détails de l'erreur 400
+        console.error('🔍 Réponse backend:', err.error);
         
-        // ✅ Extraction précise des erreurs Django
         if (err.status === 0) {
-          this.errorMsg = '🔌 Serveur injoignable. Django tourne-t-il sur http://localhost:8000 ?';
+          this.errorMsg = '🔌 Serveur injoignable. Django tourne-t-il ?';
         } else if (err.error?.matricule) {
           this.errorMsg = `❌ Matricule : ${err.error.matricule[0]}`;
         } else if (err.error?.agence) {
@@ -236,7 +253,6 @@ loadBuses(): void {
         } else if (err.error?.non_field_errors) {
           this.errorMsg = `❌ ${err.error.non_field_errors[0]}`;
         } else {
-          // ✅ Afficher l'erreur brute pour debug
           this.errorMsg = `Erreur ${err.status}: ${JSON.stringify(err.error)}`;
         }
       }
@@ -253,17 +269,17 @@ loadBuses(): void {
     this.loading = true;
     const rawValue = this.modifForm.getRawValue();
     
-    const payload: any = {
+    const payload: Partial<Bus> = {
       matricule: String(rawValue.matricule || '').trim(),
       capacite: Number(rawValue.capacite),
-      type_bus: String(rawValue.type_bus || 'standard'),
+      type_bus: rawValue.type_bus as 'standard' | 'vip' | 'minibus',
       is_active: rawValue.is_active ?? true
     };
 
     // ✅ Même logique pour l'agence en modification
     const agenceValue = rawValue.agence;
-    if (agenceValue !== null && agenceValue !== undefined && agenceValue !== '') {
-      payload.agence = Number(agenceValue);
+    if (typeof agenceValue === 'number' && agenceValue > 0) {
+      payload.agence = agenceValue;
     }
 
     this.http.patch<Bus>(`${this.apiUrl}/bus/${this.busAModifier.id}/`, payload).subscribe({
@@ -277,15 +293,18 @@ loadBuses(): void {
       },
       error: (err: HttpErrorResponse) => {
         this.loading = false;
-        console.error('Erreur modification:', err.error);
-        this.errorMsg = err.error?.matricule?.[0] || err.error?.detail || JSON.stringify(err.error) || 'Erreur modification.';
+        console.error('❌ Erreur modification:', err.error);
+        this.errorMsg = err.error?.matricule?.[0] 
+          || err.error?.detail 
+          || JSON.stringify(err.error) 
+          || 'Erreur modification.';
       }
     });
   }
 
   // ===== SUPPRESSION =====
   supprimerBus(bus: Bus): void {
-    if (!confirm(`⚠️ Supprimer le bus "${bus.matricule}" ?`)) return;
+    if (!confirm(`⚠️ Supprimer le bus "${bus.matricule}" ? Cette action est irréversible.`)) return;
     
     this.http.delete(`${this.apiUrl}/bus/${bus.id}/`).subscribe({
       next: () => {
@@ -294,17 +313,17 @@ loadBuses(): void {
         setTimeout(() => this.successMsg = '', 3000);
       },
       error: (err) => {
-        if (err.error?.detail?.includes('related')) {
-          this.errorMsg = '❌ Ce bus est lié à des trajets existants.';
+        console.error('❌ Erreur suppression:', err);
+        if (err.error?.detail?.includes('related') || err.error?.detail?.includes('foreign key')) {
+          this.errorMsg = '❌ Ce bus est lié à des trajets existants. Impossible de le supprimer.';
         } else {
-          this.errorMsg = 'Erreur suppression.';
+          this.errorMsg = 'Erreur lors de la suppression.';
         }
-        console.error('Erreur suppression:', err);
       }
     });
   }
 
-  // ===== UTILITAIRES =====
+  // ===== UTILITAIRES D'AFFICHAGE =====
   getTypeBadgeClass(type: string): string {
     const map: Record<string, string> = {
       'standard': 'badge-blue',
@@ -323,7 +342,7 @@ loadBuses(): void {
     return map[type] || type;
   }
 
-  // ===== GETTERS POUR VALIDATION =====
+  // ✅ GETTERS POUR VALIDATION TEMPLATE
   get f() { return this.busForm.controls; }
   get m() { return this.modifForm.controls; }
 }

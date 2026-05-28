@@ -2,9 +2,9 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
-import { PaiementService } from '../../services/paiement.service';
-import { ReservationService, Reservation } from '../../services/reservation.service';
-import { Navbar } from '../../components/navbar/navbar';
+import { PaiementService } from '../../../services/paiement.service';
+import { ReservationService, Reservation } from '../../../services/reservation.service';
+import { Navbar } from '../../../components/navbar/navbar';
 
 @Component({
   selector: 'app-paiement',
@@ -35,7 +35,7 @@ export class Paiement implements OnInit {
     if (reservationId) {
       this.chargerDetailsReservation(Number(reservationId));
     } else {
-      this.router.navigate(['/mes-reservations']);
+      this.router.navigate(['/reservations']);
     }
   }
 
@@ -94,7 +94,7 @@ export class Paiement implements OnInit {
       next: () => {
         this.submitting = false;
         this.succes = 'Déclaration de transaction transmise ! En attente de validation comptable.';
-        setTimeout(() => this.router.navigate(['/mes-reservations']), 2000);
+        setTimeout(() => this.router.navigate(['/reservations']), 2000);
       },
       error: (err) => {
         this.submitting = false;
