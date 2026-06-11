@@ -1,233 +1,239 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { RouterLink } from '@angular/router';
 import { environment } from '../../../../environments/environment';
 import { AuthService } from '../../../services/auth.service';
+import { finalize } from 'rxjs/operators';
+import { FormsModule } from '@angular/forms';
 
-export interface ReservationSummary {
+// ✅ TYPE DÉCLARÉ ICI (après les imports, avant le composant)
+export type ApiListResponse<T> = T[] | { count: number; results: T[]; next?: string; previous?: string };
+
+export interface Reservation {
   id: number;
-  trajet?: { id: number; ville_depart: string; ville_arrivee: string; date_depart: string; heure_depart: string; prix: number; };
-  trajet_detail?: { id: number; ville_depart: string; ville_arrivee: string; date_depart: string; heure_depart: string; prix: number; };
+  trajet_detail?: {
+    ville_depart: string;
+    ville_arrivee: string;
+    date_depart: string;
+    heure_depart: string;
+    prix: number;
+  };
   nombre_places: number;
   passager_nom: string;
-  passager_tel: string;
-  statut: string;
-  created_at?: string;
-}
-
-export interface TrajetDetail {
-  id: number;
-  ville_depart: string;
-  ville_arrivee: string;
-  date_depart: string;
-  heure_depart: string;
-  prix: number;
-  places_disponibles: number;
-  bus_details?: { matricule: string; type_bus: string; agence_nom?: string; };
+  statut: 'en_attente' | 'confirmee' | 'annulee';
+  date_reservation: string;
+  mode_paiement?: string;
 }
 
 @Component({
-  selector: 'app-client-reservation',
+  selector: 'app-client-reservations',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, RouterLink, FormsModule],
   templateUrl: './client-reservation.html',
   styleUrl: './client-reservation.scss'
 })
-export class ClientReservation implements OnInit {
+export class ClientReservations implements OnInit {
   private readonly apiUrl = environment.apiUrl;
-  bookingForm!: FormGroup;
-  trajet: TrajetDetail | null = null;
-  reservationsHistory: ReservationSummary[] = [];
+  
+  reservations: Reservation[] = [];
+  filteredReservations: Reservation[] = [];
   loading = true;
-  processing = false;
   errorText = '';
-  successText = '';
-  trajetId: number | null = null;
-  mode: 'reservation' | 'historique' = 'reservation';
+  
+  searchQuery = '';
+  filterStatut = 'all';
+  filterDate = '';
 
   constructor(
-    private route: ActivatedRoute,
-    private fb: FormBuilder,
     private http: HttpClient,
-    private router: Router,
-    private auth: AuthService
+    private auth: AuthService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
-    if (!this.auth.isLoggedIn()) {
-      this.router.navigate(['/login'], { queryParams: { return: this.router.url } });
-      return;
-    }
-
-    const trajetIdParam = this.route.snapshot.paramMap.get('id');
-    
-    if (trajetIdParam) {
-      this.mode = 'reservation';
-      this.trajetId = Number(trajetIdParam);
-      this.loadTripDetails(this.trajetId);
-    } else {
-      this.mode = 'historique';
-      this.loadReservationHistory();
-    }
+    this.loadReservations();
   }
 
-  loadTripDetails(id: number): void {
-    this.loading = true;
-    this.http.get<TrajetDetail>(`${this.apiUrl}/trajets/${id}/`).subscribe({
-      next: (data) => {
-        this.trajet = data;
-        this.initForm();
-        this.loading = false;
-      },
-      error: (err) => {
-        console.error('Erreur chargement trajet:', err);
-        this.errorText = 'Trajet non trouvé ou indisponible.';
-        this.loading = false;
-      }
+  private getAuthHeaders(): HttpHeaders {
+    const token = localStorage.getItem('token');
+    return new HttpHeaders({
+      'Authorization': token ? `Bearer ${token}` : '',
+      'Content-Type': 'application/json'
     });
   }
 
-  loadReservationHistory(): void {
+  loadReservations(): void {
     this.loading = true;
-    const user = this.auth.getCurrentUser();
+    this.errorText = '';
     
-    if (!user?.id) {
-      this.errorText = 'Utilisateur non authentifié.';
-      this.loading = false;
-      return;
-    }
-
-    this.http.get<ReservationSummary[] | { results?: ReservationSummary[] }>(
-      `${this.apiUrl}/reservations/`,
-      { params: { client: user.id.toString() } }
+    // ✅ Utilise le type ApiListResponse<Reservation>
+    this.http.get<ApiListResponse<Reservation>>(`${this.apiUrl}/reservations/`, { 
+      headers: this.getAuthHeaders() 
+    }).pipe(
+      finalize(() => { 
+        this.loading = false; 
+        this.cdr.detectChanges(); 
+      })
     ).subscribe({
       next: (response) => {
-        const data = Array.isArray(response) ? response : (response as { results?: ReservationSummary[] })?.results || [];
-        this.reservationsHistory = data;
-        this.loading = false;
-      },
-      error: (err: HttpErrorResponse) => {
-        console.error('Erreur chargement historique:', err);
-        this.errorText = 'Impossible de charger vos réservations.';
-        this.loading = false;
-      }
-    });
-  }
-
-  private initForm(): void {
-    if (!this.trajet) return;
-    const maxPlaces = this.trajet.places_disponibles || 1;
-    this.bookingForm = this.fb.group({
-      nombre_places: [1, [Validators.required, Validators.min(1), Validators.max(maxPlaces)]],
-      passager_nom: ['', [Validators.required, Validators.minLength(2)]],
-      passager_tel: ['', [Validators.required, Validators.pattern(/^[0-9]{9,15}$/)]],
-      mode_paiement: ['orange_money', Validators.required]
-    });
-  }
-
-  // ✅ MÉTHODE PRINCIPALE : Création réservation + redirection vers paiement
-  submitReservation(): void {
-    if (this.bookingForm.invalid || !this.trajet) {
-      this.bookingForm.markAllAsTouched();
-      return;
-    }
-
-    this.processing = true;
-    this.errorText = '';
-    this.successText = '';
-
-    const payload = {
-      trajet: this.trajet.id,
-      nombre_places: this.bookingForm.value.nombre_places,
-      passager_nom: this.bookingForm.value.passager_nom.trim(),
-      passager_tel: this.bookingForm.value.passager_tel.trim(),
-      mode_paiement: this.bookingForm.value.mode_paiement,
-      statut: 'en_attente'
-    };
-
-    console.log('📤 Payload réservation:', payload);
-
-    this.http.post<{ id: number }>(`${this.apiUrl}/reservations/`, payload).subscribe({
-      next: (reservation) => {
-        console.log('✅ Réservation créée:', reservation);
-        this.successText = '🎉 Réservation confirmée ! Redirection vers le paiement...';
+        let data: Reservation[];
         
-        // ✅ REDIRECTION VERS CLIENT-PAIEMENT AVEC L'ID DE LA RÉSERVATION
-        setTimeout(() => {
-          this.router.navigate(['/client/paiement'], { 
-            queryParams: { reservationId: reservation.id } 
-          });
-        }, 1500);
-      },
-      error: (err: HttpErrorResponse) => {
-        console.error('❌ Erreur réservation:', err);
-        this.processing = false;
-        
-        if (err.status === 0) {
-          this.errorText = '🔌 Serveur injoignable.';
-        } else if (err.error?.nombre_places) {
-          this.errorText = `Places: ${err.error.nombre_places[0]}`;
-        } else if (err.error?.passager_nom) {
-          this.errorText = `Nom: ${err.error.passager_nom[0]}`;
-        } else if (err.error?.passager_tel) {
-          this.errorText = `Téléphone: ${err.error.passager_tel[0]}`;
-        } else if (err.error?.trajet) {
-          this.errorText = `Trajet: ${err.error.trajet[0]}`;
-        } else if (err.error?.detail) {
-          this.errorText = err.error.detail;
-        } else if (err.error?.non_field_errors) {
-          this.errorText = err.error.non_field_errors[0];
+        // ✅ Extraction sécurisée selon le format de réponse
+        if (Array.isArray(response)) {
+          data = response;
+        } else if (response && typeof response === 'object' && 'results' in response) {
+          data = (response as { results: Reservation[] }).results;
         } else {
-          this.errorText = 'Erreur lors de la réservation. Réessayez.';
+          data = [];
         }
+        
+        console.log(`✅ ${data.length} réservation(s) extraite(s)`);
+        
+        // ✅ Tri avec typage explicite
+        this.reservations = data.sort((a: Reservation, b: Reservation) => 
+          new Date(b.date_reservation).getTime() - new Date(a.date_reservation).getTime()
+        );
+        
+        this.filteredReservations = [...this.reservations];
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        console.error('❌ Erreur HTTP:', err);
+        this.errorText = err.status === 401 
+          ? '🔐 Session expirée. Reconnectez-vous.' 
+          : err.status === 0 
+          ? ' Serveur injoignable' 
+          : `Erreur ${err.status}`;
       }
     });
   }
 
-  getUserName(): string {
-    const user = this.auth.getCurrentUser();
-    return user?.first_name || user?.username || 'Client';
-  }
+  applyFilters(): void {
+    let filtered = [...this.reservations];
 
-  getUserEmail(): string {
-    const user = this.auth.getCurrentUser();
-    return user?.email || '';
-  }
-
-  getUserAvatar(): string {
-    const user = this.auth.getCurrentUser();
-    const initials = user?.first_name?.charAt(0) || user?.username?.charAt(0) || 'C';
-    return `https://ui-avatars.com/api/?name=${initials}&background=667eea&color=fff&size=128`;
-  }
-
-  logout(): void {
-    if (confirm('Voulez-vous vraiment vous déconnecter ?')) {
-      this.auth.logout();
+    if (this.searchQuery.trim()) {
+      const query = this.searchQuery.toLowerCase().trim();
+      filtered = filtered.filter((r: Reservation) => {
+        const depart = r.trajet_detail?.ville_depart?.toLowerCase() || '';
+        const arrivee = r.trajet_detail?.ville_arrivee?.toLowerCase() || '';
+        const idStr = r.id.toString();
+        return depart.includes(query) || arrivee.includes(query) || idStr.includes(query);
+      });
     }
+
+    if (this.filterStatut !== 'all') {
+      filtered = filtered.filter((r: Reservation) => r.statut === this.filterStatut);
+    }
+
+    if (this.filterDate) {
+      filtered = filtered.filter((r: Reservation) => {
+        const resDate = r.trajet_detail?.date_depart || '';
+        return resDate === this.filterDate;
+      });
+    }
+
+    this.filteredReservations = filtered;
+    this.cdr.detectChanges();
+  }
+
+  resetFilters(): void {
+    this.searchQuery = '';
+    this.filterStatut = 'all';
+    this.filterDate = '';
+    this.applyFilters();
+  }
+
+  canCancel(res: Reservation): boolean {
+    if (res.statut !== 'en_attente') return false;
+    if (!res.trajet_detail?.date_depart || !res.trajet_detail?.heure_depart) return false;
+    
+    const departure = new Date(`${res.trajet_detail.date_depart}T${res.trajet_detail.heure_depart}`);
+    const now = new Date();
+    const diffHours = (departure.getTime() - now.getTime()) / (1000 * 60 * 60);
+    
+    return diffHours > 24;
+  }
+
+  cancelReservation(id: number): void {
+    if (!confirm('Êtes-vous sûr de vouloir annuler cette réservation ?')) return;
+
+    this.http.post(`${this.apiUrl}/reservations/${id}/annuler/`, {}, {
+      headers: this.getAuthHeaders()
+    }).subscribe({
+      next: () => {
+        const idx = this.reservations.findIndex((r: Reservation) => r.id === id);
+        if (idx !== -1) {
+          this.reservations[idx].statut = 'annulee';
+          this.applyFilters();
+        }
+        alert('✅ Réservation annulée avec succès.');
+      },
+      error: (err) => {
+        const msg = err.error?.detail || 'Impossible d\'annuler.';
+        alert('❌ ' + msg);
+      }
+    });
+  }
+    // ✅ NOUVELLE MÉTHODE : Télécharger le billet
+  downloadTicket(reservationId: number): void {
+    console.log(`📥 Demande de téléchargement pour réservation #${reservationId}`);
+    
+    this.http.get(`${this.apiUrl}/reservations/${reservationId}/ticket/`, {
+      headers: this.getAuthHeaders(),
+      responseType: 'blob' // ✅ CRUCIAL : Indique qu'on attend un fichier binaire
+    }).subscribe({
+      next: (blob) => {
+        // Création d'une URL temporaire pour le fichier
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Billet_${reservationId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        
+        // Nettoyage
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      },
+      error: (err) => {
+        console.error('❌ Erreur téléchargement:', err);
+        alert('Impossible de télécharger le billet. Vérifiez que la réservation est confirmée.');
+      }
+    });
+  }
+
+  getStatutBadge(statut: string): { class: string; label: string } {
+    switch(statut) {
+      case 'confirmee': return { class: 'badge-success', label: '✅ Confirmée' };
+      case 'annulee': return { class: 'badge-danger', label: '❌ Annulée' };
+      default: return { class: 'badge-warning', label: '⏳ En attente' };
+    }
+  }
+
+  getTotalPrice(res: Reservation): string {
+    const prix = res.trajet_detail?.prix || 0;
+    const total = prix * res.nombre_places;
+    return new Intl.NumberFormat('fr-FR').format(total) + ' FCFA';
   }
 
   formatDate(dateStr: string): string {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    if (!dateStr) return 'N/A';
+    return new Date(dateStr).toLocaleDateString('fr-FR', { 
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
   }
 
-  formatPrice(price: number): string {
-    return new Intl.NumberFormat('fr-FR').format(price) + ' FCFA';
+  formatTime(timeStr: string): string {
+    return timeStr || '';
   }
 
-  get totalPrice(): number {
-    if (!this.trajet || !this.bookingForm?.value?.nombre_places) return 0;
-    return this.trajet.prix * this.bookingForm.value.nombre_places;
-  }
-
-  goToTrajets(): void {
-    this.router.navigate(['/client/trajets']);
-  }
-
-  cancel(): void {
-    this.router.navigate(['/client/trajets']);
+  getResultsCount(): string {
+    const count = this.filteredReservations.length;
+    const total = this.reservations.length;
+    
+    if (count === 0) return 'Aucune réservation';
+    if (count === total) return `${total} réservation${total > 1 ? 's' : ''}`;
+    return `${count} sur ${total} réservation${total > 1 ? 's' : ''}`;
   }
 }

@@ -1,15 +1,19 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import UserViewSet, RegisterView, ProfileView
+from .views import UserViewSet, RegisterView, ProfileView, GestionnaireAdminViewSet
 
 router = DefaultRouter()
-router.register(r'management', UserViewSet, basename='user-management')
+# ✅ Route pour les utilisateurs (CRUD Admin)
+router.register(r'users', UserViewSet, basename='user')
+# ✅ Route pour les gestionnaires (Liste, Activer, Désactiver, Activités)
+router.register(r'gestionnaires', GestionnaireAdminViewSet, basename='gestionnaire-admin')
 
 urlpatterns = [
     # Inscription et Profil individuel
-    path('register/', RegisterView.as_view(), name='user-register'),
-    path('profile/', ProfileView.as_view(), name='user-profile'),
+    path('register/', RegisterView.as_view(), name='register'),
+    path('profile/', ProfileView.as_view(), name='profile'),
     
-    # Routes du CRUD Admin (Accessibles sous /api/users/management/)
+
+    # Inclusion des routes du routeur
     path('', include(router.urls)),
 ]

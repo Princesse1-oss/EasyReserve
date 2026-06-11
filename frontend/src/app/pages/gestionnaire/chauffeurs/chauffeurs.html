@@ -1,0 +1,229 @@
+<div class="dashboard-sidebar-layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar-vertical">
+    <div class="agency-title-header">
+      <h4>REBUS</h4>
+      <span>Espace Gérant de Gare</span>
+    </div>
+    <nav class="navigation-menu">
+      <a routerLink="/Gestionnaire"             class="nav-button">📊 Tableau de bord</a>
+      <a routerLink="/gestionnaire/trajets"     class="nav-button">🗓 Trajets</a>
+      <a routerLink="/gestionnaire/reservations"class="nav-button">🎫 Réservations</a>
+      <a routerLink="/gestionnaire/buses"       class="nav-button">🚌 Bus</a>
+      <a routerLink="/gestionnaire/chauffeurs"  class="nav-button active">👨‍✈️ Chauffeurs</a>
+    </nav>
+  </aside>
+
+  <!-- CONTENU PRINCIPAL -->
+  <main class="main-panel-content">
+
+    <header class="topbar">
+      <span class="company-logo">👨‍✈️ Gestion des Chauffeurs</span>
+      <span class="user-name">👤 {{ user?.username }}</span>
+    </header>
+
+    <div class="page-inner-content">
+
+      <!-- EN-TÊTE -->
+      <div class="page-header-row">
+        <div>
+          <h2>Chauffeurs</h2>
+          <p>{{ statsTotal }} chauffeur(s) enregistré(s)</p>
+        </div>
+        <button class="btn-primary" (click)="toggleForm()">
+          {{ showForm ? '✕ Annuler' : '+ Nouveau chauffeur' }}
+        </button>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <div class="kpi-card text-success">
+          <h3>✅ Actifs</h3>
+          <p class="value">{{ statsActifs }}</p>
+        </div>
+        <div class="kpi-card text-danger">
+          <h3>❌ Inactifs</h3>
+          <p class="value">{{ statsInactifs }}</p>
+        </div>
+        <div class="kpi-card text-warning">
+          <h3>🏖 En congé</h3>
+          <p class="value">{{ statsConge }}</p>
+        </div>
+        <div class="kpi-card text-primary">
+          <h3>👥 Total</h3>
+          <p class="value">{{ statsTotal }}</p>
+        </div>
+      </div>
+
+      <!-- MESSAGES -->
+      @if (successMsg) {
+        <div class="alert alert-success">{{ successMsg }}</div>
+      }
+      @if (errorMsg) {
+        <div class="alert alert-danger">{{ errorMsg }}</div>
+      }
+
+      <!-- FORMULAIRE CRÉATION / ÉDITION -->
+      @if (showForm) {
+        <div class="form-card">
+          <h3>{{ isEditMode ? '✏️ Modifier le chauffeur' : '➕ Nouveau chauffeur' }}</h3>
+
+          <form [formGroup]="chauffeurForm" (ngSubmit)="onSubmit()">
+            <div class="form-grid-2">
+
+              <div class="kpi-input-group">
+                <label>Prénom *</label>
+                <input type="text" formControlName="prenom" placeholder="Ex: Jean"/>
+                @if (f['prenom'].invalid && f['prenom'].touched) {
+                  <span class="field-error">Minimum 2 caractères</span>
+                }
+              </div>
+
+              <div class="kpi-input-group">
+                <label>Nom *</label>
+                <input type="text" formControlName="nom" placeholder="Ex: Dupont"/>
+                @if (f['nom'].invalid && f['nom'].touched) {
+                  <span class="field-error">Minimum 2 caractères</span>
+                }
+              </div>
+
+              <div class="kpi-input-group">
+                <label>Téléphone *</label>
+                <input type="tel" formControlName="telephone" placeholder="Ex: 699123456"/>
+                @if (f['telephone'].invalid && f['telephone'].touched) {
+                  <span class="field-error">Format invalide (9 à 15 chiffres)</span>
+                }
+              </div>
+
+              <div class="kpi-input-group">
+                <label>Email</label>
+                <input type="email" formControlName="email" placeholder="chauffeur@rebus.cm"/>
+                @if (f['email'].invalid && f['email'].touched) {
+                  <span class="field-error">Email invalide</span>
+                }
+              </div>
+
+              <div class="kpi-input-group">
+                <label>N° Permis *</label>
+                <input type="text" formControlName="numero_permis" placeholder="Ex: PERM-2024-001"/>
+                @if (f['numero_permis'].invalid && f['numero_permis'].touched) {
+                  <span class="field-error">Minimum 4 caractères</span>
+                }
+              </div>
+
+              <div class="kpi-input-group">
+                <label>Statut *</label>
+                <select formControlName="statut">
+                  <option value="actif">✅ Actif</option>
+                  <option value="inactif">❌ Inactif</option>
+                  <option value="conge">🏖 En congé</option>
+                </select>
+              </div>
+
+              <div class="kpi-input-group">
+                <label>Bus assigné</label>
+                <select formControlName="bus_assigne">
+                  <option [value]="null">— Aucun bus —</option>
+                  @for (b of buses; track b.id) {
+                    <option [value]="b.id">🚌 {{ b.matricule }} ({{ b.type_bus }})</option>
+                  }
+                </select>
+              </div>
+
+              <div class="kpi-input-group">
+                <label>Date d'embauche</label>
+                <input type="date" formControlName="date_embauche"/>
+              </div>
+
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="btn-secondary" (click)="cancelEdit()">Annuler</button>
+              <button type="submit" class="btn-primary" [disabled]="chauffeurForm.invalid">
+                {{ isEditMode ? '💾 Mettre à jour' : '✅ Créer le chauffeur' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      }
+
+      <!-- FILTRES -->
+      <div class="filtres-bar">
+        <input type="text" class="filtre-input" placeholder="Rechercher nom, téléphone, permis..."
+               [(ngModel)]="searchQuery" (input)="applyFilters()" />
+        <select class="filtre-select" [(ngModel)]="filterStatut" (change)="applyFilters()">
+          <option value="all">Tous les statuts</option>
+          <option value="actif">✅ Actif</option>
+          <option value="inactif">❌ Inactif</option>
+          <option value="conge">🏖 En congé</option>
+        </select>
+        <button class="btn-secondary btn-sm" (click)="resetFilters()">Reset</button>
+      </div>
+
+      <!-- LOADING -->
+      @if (loading) {
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Chargement des chauffeurs...</p>
+        </div>
+      }
+
+      <!-- LISTE VIDE -->
+      @else if (filteredChauffeurs.length === 0) {
+        <div class="empty-state">
+          <span>👨‍✈️</span>
+          <p>Aucun chauffeur trouvé.</p>
+          @if (chauffeurs.length === 0) {
+            <button class="btn-primary" (click)="toggleForm()">+ Ajouter le premier chauffeur</button>
+          }
+        </div>
+      }
+
+      <!-- TABLE -->
+      @else {
+        <div class="table-wrapper">
+          <table class="kpi-table-view">
+            <thead>
+              <tr>
+                <th>Chauffeur</th>
+                <th>Téléphone</th>
+                <th>N° Permis</th>
+                <th>Bus assigné</th>
+                <th>Statut</th>
+                <th>Embauché le</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (c of filteredChauffeurs; track c.id) {
+                <tr>
+                  <td>
+                    <strong>{{ c.prenom }} {{ c.nom }}</strong>
+                    @if (c.email) {
+                      <br><small class="text-muted">{{ c.email }}</small>
+                    }
+                  </td>
+                  <td>{{ c.telephone }}</td>
+                  <td><code>{{ c.numero_permis }}</code></td>
+                  <td>{{ getBusMatricule(c.bus_assigne) }}</td>
+                  <td>
+                    <span [class]="'badge-statut ' + getStatutBadgeClass(c.statut)">
+                      {{ getStatutLabel(c.statut) }}
+                    </span>
+                  </td>
+                  <td>{{ c.date_embauche ? (c.date_embauche | date:'dd/MM/yyyy') : '—' }}</td>
+                  <td class="text-end">
+                    <button class="btn btn-sm btn-outline-primary me-1" (click)="editChauffeur(c)" title="Modifier">✏️</button>
+                    <button class="btn btn-sm btn-outline-danger" (click)="deleteChauffeur(c)" title="Supprimer">🗑️</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+    </div>
+  </main>
+</div>

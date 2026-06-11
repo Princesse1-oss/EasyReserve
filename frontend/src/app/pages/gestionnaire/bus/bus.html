@@ -184,12 +184,16 @@
               <td class="actions">
                 <button class="btn-icon btn-edit" (click)="toggleModifier(bus)" title="Modifier">✏️</button>
                 <button class="btn-icon btn-delete" (click)="supprimerBus(bus)" title="Supprimer">🗑</button>
-                <button class="btn-icon btn-trajet" routerLink="/trajets/nouveau?bus={{ bus.id }}" title="Créer un trajet">🗓️</button>
+                <a class="btn-icon btn-trajet"
+                   [routerLink]="['/gestionnaire/trajets']"
+                   [queryParams]="{ bus: bus.id }"
+                   title="Créer un trajet">🗓️</a>
               </td>
             </tr>
           }
         </tbody>
       </table>
     }
-  </div>
-</div>
+  </div><!-- /.table-container -->
+</div><!-- /.buses-page -->
+</div><!-- /.page-container -->

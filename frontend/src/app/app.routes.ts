@@ -1,8 +1,10 @@
 import { Routes } from '@angular/router';
-import { authGuard, publicGuard } from './guards/auth-guard'; 
+import { authGuard, adminGuard, gestionnaireGuard, publicGuard } from './guards/auth-guard';
 
 export const routes: Routes = [
+  // ===========================
   // === PUBLIC ===
+  // ===========================
   {
     path: '',
     loadComponent: () => import('./pages/accueil/accueil').then((m) => m.Accueil),
@@ -18,90 +20,129 @@ export const routes: Routes = [
     canActivate: [publicGuard],
   },
 
-  // === GESTIONNAIRE / ADMIN ===
+  // ===========================
+  // === DASHBOARD ADMIN / GESTIONNAIRE ===
+  // ===========================
   {
-    path: 'dashboard',
+    path: 'Gestionnaire',
     loadComponent: () => import('./pages/dashboard/dashboard').then((m) => m.Dashboard),
-    canActivate: [authGuard],
+    canActivate: [gestionnaireGuard],
   },
-  {
-    path: 'trajets',
-    loadComponent: () => import('./pages/gestionnaire/trajets/trajets').then((m) => m.GestionnaireTrajets), 
-    canActivate: [authGuard],
-  },
-  {
-    path: 'reservations',  // 📋 Gestionnaire: liste globale des réservations
-    loadComponent: () => import('./pages/gestionnaire/reservations/reservations').then((m) => m.GestionnaireReservations), 
-    canActivate: [authGuard],
-  },
-  {
-    path: 'paiement',  // 💳 Gestionnaire: gestion des paiements
-    loadComponent: () => import('./pages/gestionnaire/paiement/paiement').then((m) => m.Paiement),
-    canActivate: [authGuard],
-  },
-  {
-    path: 'bus/gestionnaire',
-    loadComponent: () => import('./pages/gestionnaire/bus/bus').then((m) => m.GestionnaireBuses),
-    canActivate: [authGuard],
-  },
-  
-  // === ESPACE GESTIONNAIRE (Sidebar Hub) ===
+  // Alias lowercase pour éviter les erreurs de frappe
   {
     path: 'gestionnaire',
-    loadComponent: () => import('./pages/gestionnaire/pageAG/gestionnaire').then((m) => m.Gestionnaire),
-    canActivate: [authGuard],
+    redirectTo: 'Gestionnaire',
+    pathMatch: 'full',
   },
-  {
-    path: 'gestionnaire/dashboard',
-    loadComponent: () => import('./pages/gestionnaire/pageAG/gestionnaire').then((m) => m.Gestionnaire),
-    canActivate: [authGuard],
-  },
+
+  // ===========================
+  // === ESPACE GESTIONNAIRE ===
+  // ===========================
   {
     path: 'gestionnaire/trajets',
-    loadComponent: () => import('./pages/gestionnaire/pageAG/gestionnaire').then((m) => m.Gestionnaire),
-    canActivate: [authGuard],
+    loadComponent: () => import('./pages/gestionnaire/trajets/trajets').then((m) => m.GestionnaireTrajets),
+    canActivate: [gestionnaireGuard],
   },
   {
     path: 'gestionnaire/reservations',
-    loadComponent: () => import('./pages/gestionnaire/pageAG/gestionnaire').then((m) => m.Gestionnaire),
-    canActivate: [authGuard],
+    loadComponent: () => import('./pages/gestionnaire/reservations/reservations').then((m) => m.GestionnaireReservations),
+    canActivate: [gestionnaireGuard],
   },
   {
     path: 'gestionnaire/buses',
-    loadComponent: () => import('./pages/gestionnaire/pageAG/gestionnaire').then((m) => m.Gestionnaire),
-    canActivate: [authGuard],
+    loadComponent: () => import('./pages/gestionnaire/bus/bus').then((m) => m.GestionnaireBuses),
+    canActivate: [gestionnaireGuard],
   },
-  
-  // === ✅ ESPACE CLIENT ===
   {
-    path: 'client/trajets',  // 🔍 Recherche de trajets
+    path: 'gestionnaire/paiement',
+    loadComponent: () => import('./pages/gestionnaire/paiement/paiement').then((m) => m.Paiement),
+    canActivate: [gestionnaireGuard],
+  },
+
+  // ===========================
+  // === ADMIN — VUE ACTIVITÉS D'UN GESTIONNAIRE ===
+  // ===========================
+  {
+    path: 'dashboard/gestionnaires/:id/activites',
+    loadComponent: () => import('./pages/admin/gestionnaire-activites/gestionnaire-activites').then((m) => m.GestionnaireActivitesComponent),
+    canActivate: [adminGuard],
+  },
+
+  // ===========================
+  // === ADMIN — MODE IMPERSONIFICATION (gérer les données d'un gestionnaire) ===
+  // ===========================
+  {
+    path: 'admin/gestionnaire/:managerId/trajets',
+    loadComponent: () => import('./pages/gestionnaire/trajets/trajets').then((m) => m.GestionnaireTrajets),
+    canActivate: [adminGuard],
+  },
+  {
+    path: 'admin/gestionnaire/:managerId/buses',
+    loadComponent: () => import('./pages/gestionnaire/bus/bus').then((m) => m.GestionnaireBuses),
+    canActivate: [adminGuard],
+  },
+  {
+    path: 'admin/gestionnaire/:managerId/reservations',
+    loadComponent: () => import('./pages/gestionnaire/reservations/reservations').then((m) => m.GestionnaireReservations),
+    canActivate: [adminGuard],
+  },
+
+  // ===========================
+  // === ROUTES LEGACY (conservées pour compatibilité) ===
+  // ===========================
+  {
+    path: 'trajets',
+    loadComponent: () => import('./pages/gestionnaire/trajets/trajets').then((m) => m.GestionnaireTrajets),
+    canActivate: [gestionnaireGuard],
+  },
+  {
+    path: 'reservations',
+    loadComponent: () => import('./pages/gestionnaire/reservations/reservations').then((m) => m.GestionnaireReservations),
+    canActivate: [gestionnaireGuard],
+  },
+  {
+    path: 'paiement',
+    loadComponent: () => import('./pages/gestionnaire/paiement/paiement').then((m) => m.Paiement),
+    canActivate: [gestionnaireGuard],
+  },
+  {
+    path: 'bus/gestionnaire',
+    redirectTo: 'gestionnaire/buses',
+    pathMatch: 'full',
+  },
+
+  // ===========================
+  // === ESPACE CLIENT ===
+  // ===========================
+  {
+    path: 'client/trajets',
     loadComponent: () => import('./pages/client/client-trajets/client-trajets').then(m => m.ClientTrajets),
     canActivate: [authGuard],
   },
   {
-    path: 'client/reservation/:id',  // ✅ Avec ':id' pour l'ID dynamique
-    loadComponent: () => import('./pages/client/client-reservation/client-reservation')
-      .then(m => m.ClientReservation),
+    path: 'client/trajets/:id',
+    loadComponent: () => import('./pages/client/client-trajet-detail/client-trajet-detail').then(m => m.ClientTrajetDetail),
     canActivate: [authGuard],
   },
-  {
-    path: 'client/reservations',  // 📋 HISTORIQUE des réservations du client (SANS :id)
-    loadComponent: () => import('./pages/client/client-reservation/client-reservation').then(m => m.ClientReservation),
-    canActivate: [authGuard],
-  },
-
   {
     path: 'client/paiement',
     loadComponent: () => import('./pages/client/client-paiement/client-paiement').then(m => m.ClientPaiement),
     canActivate: [authGuard],
   },
   {
-    path: 'client/profil',  // 👤 Profil client
+    path: 'client/reservations',
+    loadComponent: () => import('./pages/client/client-reservation/client-reservation').then(m => m.ClientReservations),
+    canActivate: [authGuard],
+  },
+  {
+    path: 'client/profil',
     loadComponent: () => import('./pages/client/client-profile/client-profile').then(m => m.ClientProfile),
     canActivate: [authGuard],
   },
 
-  // === REDIRECTION 404 ===
+  // ===========================
+  // === FALLBACK 404 ===
+  // ===========================
   {
     path: '**',
     redirectTo: 'login',

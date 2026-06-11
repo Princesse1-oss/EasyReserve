@@ -1,71 +1,207 @@
+<!-- ✅ EN-TÊTE AVEC STATS ET NOTIFICATIONS -->
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+  <h2 class="fw-bold mb-0">
+    <i class="bi bi-ticket-perforated text-primary me-2"></i>Réservations
+  </h2>
+  
+  <div class="d-flex align-items-center gap-3">
+    
+    <!-- 🔔 Bouton Notifications -->
+    <div class="position-relative">
+      <button class="btn btn-outline-secondary position-relative" 
+              (click)="toggleNotifications()" 
+              title="Notifications">
+        <i class="bi bi-bell fs-5"></i>
+        <span *ngIf="unreadCount > 0" 
+              class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+          {{ unreadCount }}
+        </span>
+      </button>
+      
+<!-- Dropdown Notifications -->
+<div *ngIf="showNotifications" 
+     class="position-absolute end-0 mt-2 p-3 bg-white border rounded shadow-lg" 
+     style="width: 320px; z-index: 1000;">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h6 class="mb-0">🔔 Notifications</h6>
+    <button class="btn btn-sm btn-link text-muted p-0" (click)="markAllRead()">
+      Tout marquer lu
+    </button>
+  </div>
+  
+  <div *ngIf="notifications.length === 0" class="text-muted small py-2">
+    Aucune notification.
+  </div>
+  
+  <div *ngFor="let n of notifications" 
+       class="p-2 mb-2 border rounded {{ getNotificationClass(n.type) }} position-relative">
+    <button class="btn-close btn-sm position-absolute top-1 end-1 p-1" 
+            (click)="clearNotification(n.id); $event.stopPropagation()">
+    </button>
+    <div class="fw-bold small">{{ getNotificationIcon(n.type) }} {{ n.title }}</div>
+    <div class="small text-muted">{{ n.message }}</div>
+    <div class="small text-muted mt-1">{{ n.timestamp | date:'HH:mm' }}</div>
+    
+    <!-- ✅ CORRECTION : action!.handler() au lieu de action?.handler() -->
+    <button *ngIf="n.action" 
+            class="btn btn-sm btn-primary mt-2 w-100" 
+            (click)="n.action!.handler(); $event.stopPropagation()">
+      {{ n.action!.label }}
+    </button>
+  </div>
+</div>
+    </div>
+    
+    <!-- Bouton Refresh -->
+    <button class="btn btn-outline-primary" (click)="loadData()" title="Rafraîchir">
+      <i class="bi bi-arrow-clockwise"></i>
+    </button>
+  </div>
+</div>
 
-<div class="dashboard-layout">
-  <aside class="sidebar">
-    <nav>
-      <a routerLink="/gestionnaire/dashboard" class="nav-item">📊 Tableau de Bord</a>
-      <a routerLink="/gestionnaire/trajets" class="nav-item">📅 Trajets & Horaires</a>
-      <a routerLink="/gestionnaire/reservations" class="nav-item active">🎫 Réservations Client</a>
-      <a routerLink="/gestionnaire/buses" class="nav-item">🚌 Gestion de Bus</a>
-    </nav>
-  </aside>
+<!-- ✅ BLOC STATS / KPIs -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3 col-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body text-center">
+        <div class="display-6 text-primary fw-bold">{{ stats.total }}</div>
+        <small class="text-muted">Total Réservations</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3 col-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body text-center">
+        <div class="display-6 text-warning fw-bold">{{ stats.en_attente }}</div>
+        <small class="text-muted">En Attente</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3 col-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body text-center">
+        <div class="display-6 text-success fw-bold">{{ stats.confirmee }}</div>
+        <small class="text-muted">Confirmées</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3 col-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-body text-center">
+        <div class="display-6 text-info fw-bold">{{ stats.taux_conversion }}%</div>
+        <small class="text-muted">Taux Conversion</small>
+      </div>
+    </div>
+  </div>
+</div>
 
-  <main class="main-content">
-    <h2>Suivi des Réservations & État de Remplissage</h2>
+<!-- ✅ BLOC STATS SECONDAIRES -->
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <h6 class="text-muted mb-1">💰 Revenu Confirmé</h6>
+        <div class="h4 text-success mb-0">{{ stats.revenu_confirmee | number }} FCFA</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <h6 class="text-muted mb-1">🔮 Revenu Potentiel</h6>
+        <div class="h4 text-warning mb-0">{{ stats.revenu_potentiel | number }} FCFA</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <h6 class="text-muted mb-1">🚌 Alertes Bus</h6>
+        <div class="h4 text-danger mb-0">{{ stats.bus_plein_alert }}</div>
+        <small class="text-muted">presque pleins</small>
+      </div>
+    </div>
+  </div>
+</div>
 
-    <!-- Section 1 : État des places demandée -->
-    <div class="card" style="margin-bottom: 30px;">
-      <h3>📊 Taux de Disponibilité des Trajets</h3>
-      <table class="custom-table">
-        <thead>
+<!-- ✅ MESSAGE TEMPORAIRE (Succès/Erreur) -->
+<div *ngIf="tempMessage" 
+     class="alert alert-{{ tempMessage.type }} alert-dismissible fade show mb-3" 
+     role="alert">
+  {{ tempMessage.text }}
+  <button type="button" class="btn-close" (click)="tempMessage = null"></button>
+</div>
+
+<!-- ✅ BARRE DE FILTRES (inchangée) -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body p-3">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <input type="text" class="form-control" placeholder="Rechercher..." 
+               [(ngModel)]="searchQuery" (input)="applyFilters()" />
+      </div>
+      <div class="col-md-3">
+        <select class="form-select" [(ngModel)]="filterStatut" (change)="applyFilters()">
+          <option value="all">Tous les statuts</option>
+          <option value="en_attente">⏳ En attente</option>
+          <option value="confirmee">✅ Confirmée</option>
+          <option value="annulee">❌ Annulée</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <input type="date" class="form-control" [(ngModel)]="filterDate" (change)="applyFilters()" />
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-outline-secondary w-100" (click)="resetFilters()">Reset</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ✅ TABLEAU DES RÉSERVATIONS (inchangé, avec boutons actions) -->
+<div class="card border-0 shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="bg-light">
+        <tr>
+          <th>ID</th>
+          <th>Passager</th>
+          <th>Trajet</th>
+          <th>Date</th>
+          <th>Places</th>
+          <th>Total</th>
+          <th>Statut</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (r of filteredReservations; track r.id) {
           <tr>
-            <th>Itinéraire</th>
-            <th>Date & Heure</th>
-            <th>Places Disponibles</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let t of trajetsStatus">
-            <td>{{ t.ville_depart }} ➔ {{ t.ville_arrivee }}</td>
-            <td>Le {{ t.date_depart }} à {{ t.heure_depart }}</td>
+            <td><strong>#{{ r.id }}</strong></td>
             <td>
-              <!-- 💡 Affichage dynamique demandé : Complet ou le nombre restant -->
-              <span [class]="t.places_disponibles === 0 ? 'status-pill annulee' : 'status-pill confirme'">
-                {{ t.places_disponibles === 0 ? 'Complet' : t.places_disponibles + ' places restantes' }}
+              <div>{{ r.passager_nom || r.client_username }}</div>
+              <small class="text-muted">{{ r.passager_tel || '–' }}</small>
+            </td>
+            <td>{{ r.trajet_detail?.ville_depart }} → {{ r.trajet_detail?.ville_arrivee }}</td>
+            <td>{{ formatDate(r.trajet_detail?.date_depart || '') }}</td>
+            <td>{{ r.nombre_places }}</td>
+            <td class="fw-bold text-success">{{ formatPrice(r.trajet_detail?.prix || 0, r.nombre_places) }}</td>
+            <td>
+              <span class="badge px-2 py-1 {{ getStatutBadge(r.statut).class }}">
+                {{ getStatutBadge(r.statut).label }}
               </span>
             </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Section 2 : Validation des billets -->
-    <div class="card">
-      <h3>📋 Demandes de Billets En Attente / Validées</h3>
-      <table class="custom-table">
-        <thead>
-          <tr>
-            <th>Client</th>
-            <th>Trajet</th>
-            <th>Siège</th>
-            <th>Statut</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let r of reservations">
-            <td>{{ r.client_username }}</td>
-            <td>{{ r.trajet_detail?.ville_depart }} ➔ {{ r.trajet_detail?.ville_arrivee }}</td>
-            <td>N° {{ r.place_detail?.numero_siege || r.place }}</td>
-            <td><span class="status-pill" [ngClass]="r.statut">{{ r.statut | uppercase }}</span></td>
-            <td>
-              <button *ngIf="r.statut === 'en_attente'" (click)="validerAchat(r.id)" class="btn-validate">
-                Valider Achat
-              </button>
-              <span *ngIf="r.statut !== 'en_attente'">Terminé</span>
+            <td class="text-end">
+              @if (r.statut === 'en_attente') {
+                <button class="btn btn-success btn-sm me-1" (click)="confirmerReservation(r.id)">✓</button>
+                <button class="btn btn-outline-danger btn-sm" (click)="annulerReservation(r.id)">✕</button>
+              } @else {
+                <span class="text-muted small">–</span>
+              }
             </td>
           </tr>
-        </tbody>
-      </table>
-    </div>
-  </main>
+        }
+      </tbody>
+    </table>
+  </div>
 </div>

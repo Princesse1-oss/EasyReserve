@@ -26,8 +26,8 @@ class AgenceViewSet(viewsets.ModelViewSet):
             return [IsAdminUserCustom()]
         return [permissions.IsAuthenticated()]
 
-    @action(detail=False, methods=['get', 'put', 'patch'], permission_classes=[IsGestionnaire])
-    def ma_gérance(self, request):
+    @action(detail=False, methods=['get', 'put', 'patch'], url_path='ma-gerance', permission_classes=[IsGestionnaire])
+    def ma_gerance(self, request):
         """Endpoint permettant à un Gestionnaire de voir/modifier son agence dédiée."""
         try:
             agence = request.user.agence

@@ -48,7 +48,7 @@ export class GestionnaireBuses implements OnInit {
   buses: Bus[] = [];
   agences: Agence[] = [];
   
-  loading = false;
+  loading = true;
   successMsg = '';
   errorMsg = '';
   

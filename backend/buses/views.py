@@ -20,8 +20,7 @@ class BusViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            # 💡 Correction ici : Utilisation de l'opérateur de composition binaire de DRF ou une liste nettoyée
-            return [(IsAdminUserCustom | IsGestionnaire)()]
+            return [IsAdminUserCustom() | IsGestionnaire()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):

@@ -1,49 +1,86 @@
-import {
-  HttpInterceptorFn,
-  HttpRequest,
-  HttpHandlerFn,
-  HttpErrorResponse,
-} from '@angular/common/http';
+import { HttpInterceptorFn, HttpErrorResponse, HttpRequest, HttpHandlerFn } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { catchError, switchMap, throwError } from 'rxjs';
+import { Observable, throwError, BehaviorSubject } from 'rxjs';
+import { catchError, filter, take, switchMap, finalize } from 'rxjs/operators';
 import { AuthService } from '../services/auth.service';
 
-export const authInterceptor: HttpInterceptorFn = (
-  req: HttpRequest<unknown>,
-  next: HttpHandlerFn
-) => {
-  const authService = inject<AuthService>(AuthService);
+// ✅ Variables pour gérer le rafraîchissement concurrent
+let isRefreshing = false;
+const refreshTokenSubject = new BehaviorSubject<string | null>(null);
+
+/**
+ * ✅ Intercepteur fonctionnel Angular 17+
+ * Compatible avec withInterceptors() dans app.config.ts
+ */
+export const authInterceptor: HttpInterceptorFn = (req, next: HttpHandlerFn): Observable<any> => {
+  const authService = inject(AuthService);
   const token = authService.getToken();
+  
+  // ✅ N'injecte le token que sur les URLs API locales
+  const isApiUrl = req.url.startsWith('http') && !req.url.includes('github') && !req.url.includes('fonts.googleapis');
+  
+  if (token && isApiUrl) {
+    req = req.clone({
+      setHeaders: { Authorization: `Bearer ${token}` }
+    });
+  }
 
-  // 💡 Optimisation : Détection plus robuste des routes publiques d'authentification
-  const isTokenUrl = req.url.includes('/token/');
-  const isRegisterUrl = req.url.includes('/users/register/');
-  const isPublicUrl = isTokenUrl || isRegisterUrl;
-
-  // 💡 Sécurité : On injecte le token uniquement s'il existe physiquement ET que ce n'est pas une route publique
-  const authReq = token && !isPublicUrl
-    ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
-    : req;
-
-  return next(authReq).pipe(
+  return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
-      // Si l'erreur est 401 (Non autorisé) et qu'on ne tente pas déjà de rafraîchir ou de se connecter
-      if (error.status === 401 && !isPublicUrl && !req.url.includes('/token/refresh/')) {
-        return authService.refreshToken().pipe(
-          switchMap((response) => {
-            const retryReq = req.clone({
-              setHeaders: { Authorization: `Bearer ${response.access}` },
-            });
-            return next(retryReq);
-          }),
-          catchError((refreshError: unknown) => {
-            // Si le refresh token a expiré lui aussi, déconnexion immédiate
-            authService.logout();
-            return throwError(() => refreshError);
-          })
-        );
+      if (error.status === 401 && isApiUrl) {
+        return handle401Error(req, next, authService);
       }
       return throwError(() => error);
     })
   );
 };
+
+/**
+ * ✅ Gère l'erreur 401 : tente de rafraîchir le token
+ */
+function handle401Error(
+  req: HttpRequest<any>,
+  next: HttpHandlerFn,
+  authService: AuthService
+): Observable<any> {
+  if (!isRefreshing) {
+    isRefreshing = true;
+    refreshTokenSubject.next(null);
+
+    return authService.refreshToken().pipe(
+      switchMap((response: { access: string; refresh?: string }) => {
+        if (response.access) {
+          localStorage.setItem('token', response.access);
+        }
+        if (response.refresh) {
+          localStorage.setItem('refreshToken', response.refresh);
+        }
+
+        isRefreshing = false;
+        refreshTokenSubject.next(response.access);
+
+        return next(
+          req.clone({ setHeaders: { Authorization: `Bearer ${response.access}` } })
+        );
+      }),
+      catchError((err) => {
+        isRefreshing = false;
+        authService.logout();
+        return throwError(() => err);
+      }),
+      finalize(() => { isRefreshing = false; })
+    );
+  } else {
+    // ✅ Attendre que le refresh en cours se termine
+    return refreshTokenSubject.pipe(
+      filter(token => token !== null),
+      take(1),
+      switchMap((newToken: string | null) => {
+        if (!newToken) return throwError(() => new Error('No new token'));
+        return next(
+          req.clone({ setHeaders: { Authorization: `Bearer ${newToken}` } })
+        );
+      })
+    );
+  }
+}

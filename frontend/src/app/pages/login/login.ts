@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
-import { AuthService } from '../../services/auth.service';
+import { AuthService, User } from '../../services/auth.service'; // ✅ AJOUT DE ', User' ICI
 
 @Component({
   selector: 'app-login',
@@ -26,7 +26,6 @@ export class Login {
       password: ['', [Validators.required, Validators.minLength(4)]],
     });
 
-    // Si déjà connecté, redirige selon le rôle
     if (this.authService.isLoggedIn()) {
       this.redirigerSelonRole();
     }
@@ -35,12 +34,11 @@ export class Login {
   get username() { return this.loginForm.get('username'); }
   get password() { return this.loginForm.get('password'); }
 
-  // ✅ MÉTHODE DE REDIRECTION CORRIGÉE
   redirigerSelonRole(): void {
     const user = this.authService.getCurrentUser();
     
-    if (!user) {
-      console.warn('⚠️ Aucun utilisateur trouvé, redirection vers login');
+    if (!user || !user.role) {
+      console.warn('⚠️ Utilisateur ou rôle manquant');
       this.router.navigate(['/login']);
       return;
     }
@@ -49,30 +47,21 @@ export class Login {
     
     switch (user.role) {
       case 'ADMIN':
-        // 👑 Admin → Dashboard principal
-        this.router.navigate(['/dashboard']);
+        this.router.navigate(['/Gestionnaire']);
         break;
-        
       case 'GESTIONNAIRE':
-        // 👨‍💼 Gestionnaire → Espace gestionnaire
-        this.router.navigate(['/gestionnaire']);
+        this.router.navigate(['/Gestionnaire']);
         break;
-        
       case 'CLIENT':
-        // 🎫 CLIENT → Page de recherche de trajets (ROUTE CORRIGÉE)
-        // ✅ '/client' n'existe pas, la bonne route est '/client/trajets'
-        console.log('🎫 Redirection CLIENT vers /client/trajets');
         this.router.navigate(['/client/trajets']);
         break;
-        
       default:
-        // 🔒 Sécurité : rôle inconnu → déconnexion
-        console.warn('⚠️ Rôle inconnu:', user.role);
         this.authService.logout();
         this.router.navigate(['/login']);
     }
   }
 
+  // ✅ onSubmit() avec typage correct
   onSubmit(): void {
     if (this.loginForm.invalid) {
       this.loginForm.markAllAsTouched();
@@ -82,33 +71,30 @@ export class Login {
     this.loading = true;
     this.erreur = '';
 
-    console.log('🔐 Tentative de login avec:', this.loginForm.value);
-
     this.authService.login(this.loginForm.value).subscribe({
-      next: () => {
-        console.log('✅ Login réussi, tokens stockés');
-        
-        // ✅ Petit délai pour laisser le temps au décodage du token
-        setTimeout(() => {
-          const user = this.authService.getCurrentUser();
-          console.log('👤 getCurrentUser() retourne:', user);
+        next: (user) => {
+          console.log('🔍 DEBUG next() appelé');
+          console.log('🔍 localStorage.token:', localStorage.getItem('token'));
+          console.log('🔍 currentUser:', this.authService.getCurrentUser());
           
           this.loading = false;
-          this.redirigerSelonRole();
-        }, 100);
-      },
-      error: (err) => {
-        console.error('❌ Erreur login:', err);
-        this.loading = false;
-        
-        if (err.status === 401) {
-          this.erreur = "Nom d'utilisateur ou mot de passe incorrect.";
-        } else if (err.status === 0) {
-          this.erreur = "🔌 Serveur injoignable. Django tourne-t-il ?";
-        } else {
-          this.erreur = 'Une erreur est survenue. Veuillez réessayer.';
+          if (user) {
+            console.log('🚀 Appel de redirigerSelonRole()');
+            this.redirigerSelonRole();
+          }
+        },
+        error: (err) => {
+          this.loading = false;
+          if (err.status === 0) {
+            this.erreur = 'Serveur injoignable. Vérifiez votre connexion.';
+          } else if (err.status === 401) {
+            this.erreur = 'Identifiants incorrects. Vérifiez votre nom d\'utilisateur et mot de passe.';
+          } else if (err.status === 400) {
+            this.erreur = err.error?.detail || err.error?.non_field_errors?.[0] || 'Données invalides.';
+          } else {
+            this.erreur = `Erreur serveur (${err.status}). Réessayez plus tard.`;
+          }
         }
-      },
-    });
+      });
   }
 }

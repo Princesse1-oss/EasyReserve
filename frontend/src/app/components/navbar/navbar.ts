@@ -26,6 +26,10 @@ export class Navbar {
     return this.authService.isAdmin();
   }
 
+  get isGestionnaire(): boolean {
+    return this.authService.isGestionnaire();
+  }
+
   toggleMenu(): void {
     this.menuOuvert = !this.menuOuvert;
   }

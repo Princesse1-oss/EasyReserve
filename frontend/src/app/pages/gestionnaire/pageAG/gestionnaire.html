@@ -84,7 +84,7 @@
       <div *ngSwitchCase="'trajets'">
         <h2>Trajets & Horaires</h2>
         <div class="kpi-metrics-grid">
-          <div class="metric-card border-primary"><h5>🚀 Départs Aujourd'hui</h5><p class="val text-primary">{{ departsAujourdhui }} trajets</p></div>
+          <div class="metric-card border-primary"><h5>🚀 Départs Aujourd'hui</h5><p class="val text-primary">{{ trajets.length }} trajets</p></div>
           <div class="metric-card border-info"><h5>📊 Taux d'Occupation</h5><p class="val text-info">{{ tauxOccupation }}%</p></div>
           <div class="metric-card border-danger"><h5>🚨 Alertes Tarifs</h5><p class="val text-danger">{{ alerteTarif }}</p></div>
           <div class="metric-card border-success"><h5>🔮 Revenu Prévisionnel (24h)</h5><p class="val text-success">{{ revenuPrevisionnel | number }} FCFA</p></div>
@@ -96,7 +96,24 @@
             <form [formGroup]="trajetForm" (ngSubmit)="addTrajetSubmit()">
               <div class="kpi-input-group"><label>Ville de Départ</label><input type="text" formControlName="ville_depart" placeholder="Yaoundé" /></div>
               <div class="kpi-input-group"><label>Ville d'Arrivée</label><input type="text" formControlName="ville_arrivee" placeholder="Douala" /></div>
-              <div class="kpi-input-group"><label>Date de Départ</label><input type="date" formControlName="date_depart" /></div>
+              <div class="kpi-input-group">
+                <label>Date de Départ *</label>
+                <input 
+                  type="date" 
+                  formControlName="date_depart" 
+                  class="form-control"
+                  [min]="getMinDate()"
+                />
+                <!-- ✅ Message d'erreur si date invalide -->
+                <small *ngIf="trajetForm.get('date_depart')?.invalid && trajetForm.get('date_depart')?.touched" class="text-danger">
+                  <span *ngIf="trajetForm.get('date_depart')?.errors?.['required']">
+                    ⚠️ La date est requise
+                  </span>
+                  <span *ngIf="trajetForm.get('date_depart')?.errors?.['datePassee']">
+                    ❌ Impossible : la date ne peut pas être dans le passé
+                  </span>
+                </small>
+              </div>
               <div class="kpi-input-group"><label>Heure de Départ</label><input type="time" formControlName="heure_depart" /></div>
               <div class="kpi-input-group"><label>Tarif du Billet (FCFA)</label><input type="number" formControlName="prix" placeholder="5000" /></div>
               <div class="kpi-input-group">

@@ -1,26 +1,27 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { RouterLink } from '@angular/router';
+import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
+import { RouterLink, ActivatedRoute, Router } from '@angular/router'; // ✅ Ajout ActivatedRoute + Router
+import { catchError, finalize, of } from 'rxjs'; // ✅ Ajout des opérateurs rxjs manquants
 import { environment } from '../../../../environments/environment';
 import { AuthService } from '../../../services/auth.service';
-import { Navbar } from '../../../components/navbar/navbar';
 
+// ==================== INTERFACES ====================
 interface Trajet {
   id: number;
   bus: number;
-  bus_matricule?: string;
-  bus_type?: string;
-  bus_capacite?: number;
   ville_depart: string;
   ville_arrivee: string;
   date_depart: string;
   heure_depart: string;
   prix: number;
   places_disponibles: number;
-  statut?: 'planifie' | 'en_cours' | 'termine' | 'annule';
-  agence_nom?: string;
+  statut?: string;
+  statut_depart?: 'planifie' | 'parti' | 'annule';
+  bus_matricule?: string;
+  bus_type?: string;
+  bus_capacite?: number;
 }
 
 interface Bus {
@@ -28,10 +29,9 @@ interface Bus {
   matricule: string;
   capacite: number;
   type_bus: string;
-  agence?: number | null;
-  agence_nom?: string;
 }
 
+// ==================== COMPOSANT ====================
 @Component({
   selector: 'app-trajets',
   standalone: true,
@@ -42,32 +42,112 @@ interface Bus {
 export class GestionnaireTrajets implements OnInit {
   private readonly apiUrl = environment.apiUrl;
   
+  // ✅ User pour la topbar
+  user: any = null;
+  
+  // ✅ PROPRIÉTÉS POUR LE MODE ADMIN (ajoutées)
+  isAdminMode = false;
+  managerId: string | null = null;
+  gestionnaireNom = '';
+  agenceNom = '';
+  errorText = ''; // ✅ Pour les erreurs API mode admin
+  
+  // Formulaires
   trajetForm!: FormGroup;
+  isEditMode = false;
+  editingTrajetId: number | null = null;
+  
+  // Données
   trajets: Trajet[] = [];
   busDisponibles: Bus[] = [];
   
+  // États
   loading = false;
   successMsg = '';
   errorMsg = '';
   
   // KPIs
+  totalTrajets = 0;
   departsAujourdhui = 0;
-  tauxOccupationMoyen = 78;
+  tauxOccupationMoyen = 0;
   alerteTarif = 'Aucune';
   revenuPrevisionnel = 0;
 
   constructor(
     private fb: FormBuilder, 
     private http: HttpClient,
-    private authService: AuthService
+    private authService: AuthService,
+    private cdr: ChangeDetectorRef,
+    // ✅ Injection des services pour le mode admin
+    private route: ActivatedRoute,
+    private router: Router
   ) {}
 
   ngOnInit(): void {
-    this.initForm();
-    this.loadTrajets();
-    this.loadBusDisponibles();
+    // ✅ Récupération de l'utilisateur connecté pour la topbar
+    this.user = this.authService.getCurrentUser();
+    
+    // ✅ DÉTECTION DU MODE ADMIN (nouveau)
+    this.managerId = this.route.snapshot.paramMap.get('managerId');
+    this.isAdminMode = !!this.managerId;
+    
+    if (this.isAdminMode) {
+      this.gestionnaireNom = this.route.snapshot.queryParamMap.get('nom') || 'Gestionnaire';
+      this.agenceNom = this.route.snapshot.queryParamMap.get('agence') || 'Agence inconnue';
+      console.log('👁️ Mode admin : consultation de', this.gestionnaireNom);
+      this.chargerDonneesPourGestionnaire(Number(this.managerId));
+    } else {
+      console.log('👤 Mode gestionnaire : chargement de mes trajets');
+      this.initForm();
+      this.loadTrajets();
+      this.loadBusDisponibles();
+    }
   }
 
+  // ==================== MÉTHODES MODE ADMIN (nouvelles) ====================
+  
+  // ✅ Headers avec token pour les appels API
+  private getAuthHeaders(): HttpHeaders {
+    const token = localStorage.getItem('token');
+    return new HttpHeaders({
+      'Authorization': token ? `Bearer ${token}` : '',
+      'Content-Type': 'application/json'
+    });
+  }
+
+  // ✅ Charger les données DU gestionnaire ciblé (pour l'admin)
+  private chargerDonneesPourGestionnaire(managerId: number): void {
+    this.loading = true;
+    this.errorText = '';
+    
+    this.http.get<Trajet[]>(
+      `${this.apiUrl}/trajets/?manager_id=${managerId}`,
+      { headers: this.getAuthHeaders() }
+    ).pipe(
+      catchError((err: HttpErrorResponse) => {
+        console.error('❌ Erreur chargement trajets gestionnaire:', err);
+        this.errorText = err.error?.detail || 'Impossible de charger les trajets.';
+        this.errorMsg = this.errorText; // ✅ Affiche dans l'UI existante
+        return of([]);
+      }),
+      finalize(() => {
+        this.loading = false;
+        this.forceUpdate();
+      })
+    ).subscribe((data: Trajet[]) => {
+      this.trajets = data.map(t => this.mapTrajet(t));
+      this.calculateKPIs();
+      console.log(`✅ ${this.trajets.length} trajets chargés pour le gestionnaire #${managerId}`);
+      this.forceUpdate();
+    });
+  }
+
+  // ✅ Retour au dashboard
+  goBack(): void {
+    this.router.navigate(['/Gestionnaire']);
+  }
+
+  // ==================== INITIALISATION ====================
   private initForm(): void {
     this.trajetForm = this.fb.group({
       ville_depart: ['', [Validators.required, Validators.minLength(2)]],
@@ -75,65 +155,41 @@ export class GestionnaireTrajets implements OnInit {
       date_depart: ['', Validators.required],
       heure_depart: ['', Validators.required],
       prix: ['', [Validators.required, Validators.min(500)]],
-      bus: [null, Validators.required],
-      places_disponibles: [null]
+      bus: [null, Validators.required]
     });
   }
 
-  // ===== CHARGEMENT DES TRAJETS =====
+  // ==================== CHARGEMENT DES DONNÉES ====================
   loadTrajets(): void {
+    console.log('📡 Chargement des trajets...');
     this.loading = true;
+    this.errorMsg = '';
     
     this.http.get<any>(`${this.apiUrl}/trajets/`).subscribe({
       next: (response) => {
-        // ✅ Extraction sécurisée du format Django REST Framework
         const data = response?.results || (Array.isArray(response) ? response : []);
+        console.log(`📦 ${data.length} trajets reçus`);
         
-        // ✅ Enrichissement avec les infos du bus pour l'affichage
-        this.trajets = data.map((t: any) => ({
-          ...t,
-          bus_matricule: t.bus_detail?.matricule || t.bus_matricule || `Bus #${t.bus}`,
-          bus_type: t.bus_detail?.type_bus || t.bus_type || 'standard',
-          bus_capacite: t.bus_detail?.capacite || t.bus_capacite || 45
-        }));
-        
-        // ✅ Calcul des KPIs
-        this.departsAujourdhui = this.trajets.filter((t: Trajet) => 
-          t.date_depart === new Date().toISOString().split('T')[0]
-        ).length;
-        
-        this.revenuPrevisionnel = this.trajets
-          .filter((t: Trajet) => t.statut !== 'annule')
-          .reduce((acc, t) => acc + (Number(t.prix) * (t.bus_capacite || 45)), 0);
-        
+        this.trajets = data.map((t: any) => this.mapTrajet(t));
+        this.calculateKPIs();
         this.loading = false;
-        console.log('✅ Trajets chargés:', this.trajets.length);
+        this.forceUpdate();
       },
       error: (err) => {
+        console.error('❌ Erreur chargement trajets:', err);
+        this.errorMsg = 'Impossible de charger les trajets. Vérifiez votre connexion.';
         this.loading = false;
-        this.errorMsg = 'Impossible de charger les trajets.';
-        console.error('Erreur chargement trajets:', err);
+        this.forceUpdate();
       }
     });
   }
 
-  // ===== CHARGEMENT DES BUS DISPONIBLES =====
   loadBusDisponibles(): void {
-    const params: any = { is_active: 'true' };
-    
-    // ✅ Si gestionnaire, filtrer uniquement les bus de son agence
-    if (this.authService.isGestionnaire()) {
-      const user: any = this.authService.getCurrentUser();
-      if (user?.agence_id) {
-        params.agence = user.agence_id;
-      }
-    }
-    
-    this.http.get<any>(`${this.apiUrl}/bus/`, { params }).subscribe({
+    this.http.get<any>(`${this.apiUrl}/bus/`).subscribe({
       next: (response) => {
         const data = response?.results || (Array.isArray(response) ? response : []);
         this.busDisponibles = data;
-        console.log('🚌 Bus disponibles:', this.busDisponibles.length);
+        console.log(`🚌 ${this.busDisponibles.length} bus disponibles`);
       },
       error: (err) => {
         console.error('Erreur chargement bus:', err);
@@ -142,77 +198,238 @@ export class GestionnaireTrajets implements OnInit {
     });
   }
 
-  // ===== CRÉATION D'UN TRAJET =====
+  // ==================== MAPPING ====================
+  private mapTrajet(t: any): Trajet {
+    return {
+      id: t.id || 0,
+      bus: t.bus || 0,
+      ville_depart: t.ville_depart || '',
+      ville_arrivee: t.ville_arrivee || '',
+      date_depart: t.date_depart || '',
+      heure_depart: t.heure_depart || '',
+      prix: t.prix || 0,
+      places_disponibles: t.places_disponibles ?? 45,
+      statut: t.statut || 'planifie',
+      statut_depart: t.statut_depart || 'planifie',
+      bus_matricule: t.bus_details?.matricule || t.bus_detail?.matricule || t.bus_matricule || `Bus #${t.bus}`,
+      bus_type: t.bus_details?.type_bus || t.bus_detail?.type_bus || t.bus_type || 'Standard',
+      bus_capacite: t.bus_details?.capacite || t.bus_detail?.capacite || t.bus_capacite || 45
+    };
+  }
+
+  // ==================== KPIs ====================
+  private calculateKPIs(): void {
+    this.totalTrajets = this.trajets.length;
+    
+    const today = new Date().toISOString().split('T')[0];
+    this.departsAujourdhui = this.trajets.filter(t => {
+      const trajetDate = t.date_depart?.split('T')[0] || '';
+      return trajetDate === today;
+    }).length;
+    
+    this.revenuPrevisionnel = this.trajets.reduce((acc, t) => {
+      const cap = t.bus_capacite || 45;
+      const vendues = cap - (t.places_disponibles ?? cap);
+      return acc + (t.prix || 0) * Math.max(0, vendues);
+    }, 0);
+    
+    if (this.trajets.length > 0) {
+      const totalCap = this.trajets.reduce((sum, t) => sum + (t.bus_capacite || 45), 0);
+      const totalVendues = this.trajets.reduce((sum, t) => {
+        const cap = t.bus_capacite || 45;
+        const vendues = cap - (t.places_disponibles ?? cap);
+        return sum + Math.max(0, vendues);
+      }, 0);
+      this.tauxOccupationMoyen = totalCap > 0 ? Math.round((totalVendues / totalCap) * 100) : 0;
+    } else {
+      this.tauxOccupationMoyen = 0;
+    }
+    
+    const basPrix = this.trajets.filter(t => (t.prix || 0) < 3000).length;
+    this.alerteTarif = basPrix > 0 ? `${basPrix} trajet(s) < 3000 FCFA` : 'Aucune';
+  }
+
+  // ==================== CRUD ====================
   onSubmit(): void {
     if (this.trajetForm.invalid) {
       this.trajetForm.markAllAsTouched();
-      this.errorMsg = 'Veuillez remplir tous les champs obligatoires.';
+      this.showError('Veuillez remplir tous les champs obligatoires.');
       return;
     }
 
     this.loading = true;
-    this.errorMsg = '';
-    this.successMsg = '';
-
-    const rawValue = this.trajetForm.getRawValue();
+    const val = this.trajetForm.value;
     
-    // ✅ Construction du payload pour Django
     const payload = {
-      bus: Number(rawValue.bus),
-      ville_depart: rawValue.ville_depart.trim(),
-      ville_arrivee: rawValue.ville_arrivee.trim(),
-      date_depart: rawValue.date_depart,
-      heure_depart: rawValue.heure_depart,
-      prix: Number(rawValue.prix),
-      // ✅ Places disponibles = capacité du bus si non spécifié
-      places_disponibles: rawValue.places_disponibles || 
-        this.busDisponibles.find(b => b.id === rawValue.bus)?.capacite || 45,
-      statut: 'planifie'
+      bus: Number(val.bus),
+      ville_depart: val.ville_depart.trim(),
+      ville_arrivee: val.ville_arrivee.trim(),
+      date_depart: val.date_depart,
+      heure_depart: val.heure_depart,
+      prix: Number(val.prix),
+      places_disponibles: this.busDisponibles.find(b => b.id === val.bus)?.capacite ?? 45
     };
 
-    console.log('📤 Payload trajet:', payload);
+    // ✅ URL différente selon le mode (admin ou gestionnaire)
+    const baseUrl = this.isAdminMode && this.managerId
+      ? `${this.apiUrl}/trajets/?manager_id=${this.managerId}`
+      : `${this.apiUrl}/trajets/`;
 
-    this.http.post<Trajet>(`${this.apiUrl}/trajets/`, payload).subscribe({
-      next: (response) => {
-        this.loading = false;
-        this.successMsg = `✅ Trajet "${payload.ville_depart} → ${payload.ville_arrivee}" créé !`;
-        
-        this.trajetForm.reset({ 
-          prix: '', 
-          places_disponibles: null,
-          bus: null 
-        });
-        
-        // ✅ Rafraîchissement des listes
-        this.loadTrajets();
-        this.loadBusDisponibles();
-        
-        setTimeout(() => this.successMsg = '', 4000);
+    if (this.isEditMode && this.editingTrajetId) {
+      this.updateTrajet(this.editingTrajetId, payload, baseUrl);
+    } else {
+      this.createTrajet(payload, baseUrl);
+    }
+  }
+
+  private createTrajet(payload: any, baseUrl: string): void {
+    this.http.post<Trajet>(baseUrl, payload, { headers: this.getAuthHeaders() }).subscribe({
+      next: (res) => {
+        console.log('✅ Trajet créé:', res);
+        this.showSuccess('Trajet créé avec succès !');
+        this.resetForm();
+        // Recharger selon le mode
+        if (this.isAdminMode && this.managerId) {
+          this.chargerDonneesPourGestionnaire(Number(this.managerId));
+        } else {
+          this.loadTrajets();
+          this.loadBusDisponibles();
+        }
       },
       error: (err: HttpErrorResponse) => {
+        console.error('❌ Erreur création:', err);
+        this.showError(err.error?.detail || 'Erreur lors de la création du trajet');
         this.loading = false;
-        console.error('❌ Erreur création trajet:', err);
-        
-        if (err.status === 400) {
-          this.errorMsg = Object.entries(err.error || {})
-            .map(([k, v]: any) => `${k}: ${Array.isArray(v) ? v[0] : v}`)
-            .join(' | ');
-        } else if (err.status === 0) {
-          this.errorMsg = '🔌 Serveur injoignable.';
-        } else {
-          this.errorMsg = 'Erreur lors de la création du trajet.';
-        }
+        this.forceUpdate();
       }
     });
   }
 
-  // ===== UTILITAIRES =====
-  formatDate(dateStr: string): string {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('fr-FR', { 
-      weekday: 'short', day: 'numeric', month: 'short' 
+  editTrajet(trajet: Trajet): void {
+    console.log('✏️ Édition trajet:', trajet.id);
+    
+    this.isEditMode = true;
+    this.editingTrajetId = trajet.id;
+    
+    this.trajetForm.patchValue({
+      ville_depart: trajet.ville_depart,
+      ville_arrivee: trajet.ville_arrivee,
+      date_depart: trajet.date_depart,
+      heure_depart: trajet.heure_depart,
+      prix: trajet.prix,
+      bus: trajet.bus
     });
+    
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    this.showInfo('Mode édition activé. Modifiez les informations puis cliquez sur "Mettre à jour".');
+  }
+
+  private updateTrajet(id: number, payload: any, baseUrl: string): void {
+    this.http.put<Trajet>(`${baseUrl}${id}/`, payload, { headers: this.getAuthHeaders() }).subscribe({
+      next: (res) => {
+        console.log('✅ Trajet mis à jour:', res);
+        this.showSuccess('Trajet mis à jour avec succès !');
+        this.resetForm();
+        if (this.isAdminMode && this.managerId) {
+          this.chargerDonneesPourGestionnaire(Number(this.managerId));
+        } else {
+          this.loadTrajets();
+        }
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error('❌ Erreur mise à jour:', err);
+        this.showError(err.error?.detail || 'Erreur lors de la mise à jour');
+        this.loading = false;
+        this.forceUpdate();
+      }
+    });
+  }
+
+  deleteTrajet(trajet: Trajet): void {
+    if (!confirm(`Confirmer la suppression du trajet ${trajet.ville_depart} → ${trajet.ville_arrivee} ?`)) return;
+
+    this.http.delete(`${this.apiUrl}/trajets/${trajet.id}/`, { headers: this.getAuthHeaders() }).subscribe({
+      next: () => {
+        this.showSuccess('Trajet supprimé avec succès !');
+        if (this.isAdminMode && this.managerId) {
+          this.chargerDonneesPourGestionnaire(Number(this.managerId));
+        } else {
+          this.loadTrajets();
+        }
+      },
+      error: (err) => {
+        this.showError('Impossible de supprimer ce trajet');
+        this.forceUpdate();
+      }
+    });
+  }
+
+  // ✅ CONFIRMATION DU DÉPART
+  confirmerDepart(trajet: Trajet): void {
+    if (!confirm(`Confirmer le départ du trajet ${trajet.ville_depart} → ${trajet.ville_arrivee} ?\nCette action fermera les réservations.`)) return;
+
+    this.http.post(`${this.apiUrl}/trajets/${trajet.id}/confirmer_depart/`, {}, { headers: this.getAuthHeaders() }).subscribe({
+      next: (res: any) => {
+        this.showSuccess(`🚌 Départ confirmé : ${trajet.ville_depart} → ${trajet.ville_arrivee}`);
+        // Mettre à jour localement
+        const idx = this.trajets.findIndex(t => t.id === trajet.id);
+        if (idx !== -1) {
+          this.trajets[idx] = { ...this.trajets[idx], statut_depart: 'parti' } as any;
+          this.forceUpdate();
+        }
+      },
+      error: (err: HttpErrorResponse) => {
+        this.showError(err.error?.detail || 'Erreur lors de la confirmation du départ.');
+      }
+    });
+  }
+
+  // ==================== UTILITAIRES ====================
+  cancelEdit(): void {
+    this.resetForm();
+    this.showInfo('Édition annulée');
+  }
+
+  private resetForm(): void {
+    this.trajetForm.reset();
+    this.isEditMode = false;
+    this.editingTrajetId = null;
+    this.loading = false;
+  }
+
+  private showSuccess(msg: string): void {
+    this.successMsg = msg;
+    this.errorMsg = '';
+    this.forceUpdate();
+    setTimeout(() => {
+      this.successMsg = '';
+      this.forceUpdate();
+    }, 4000);
+  }
+
+  private showError(msg: string): void {
+    this.errorMsg = msg;
+    this.successMsg = '';
+    this.forceUpdate();
+  }
+
+  private showInfo(msg: string): void {
+    this.successMsg = msg;
+    this.forceUpdate();
+  }
+
+  private forceUpdate(): void {
+    this.cdr.markForCheck();
+    this.cdr.detectChanges();
+  }
+
+  formatDate(d: string): string {
+    if (!d) return '';
+    try {
+      return new Date(d).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+    } catch {
+      return d;
+    }
   }
 
   getStatutColor(statut: string): string {
@@ -225,6 +442,6 @@ export class GestionnaireTrajets implements OnInit {
     return colors[statut || 'planifie'] || 'badge-gray';
   }
 
-  // ===== GETTERS POUR VALIDATION =====
   get f() { return this.trajetForm.controls; }
+  get isEditing() { return this.isEditMode; }
 }

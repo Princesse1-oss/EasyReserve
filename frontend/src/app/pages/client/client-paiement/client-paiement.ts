@@ -1,202 +1,195 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { environment } from '../../../../environments/environment';
 import { AuthService } from '../../../services/auth.service';
 
-export interface ReservationSummary {
-  id: number;
-  trajet?: { id: number; ville_depart: string; ville_arrivee: string; date_depart: string; heure_depart: string; prix: number; };
-  trajet_detail?: { id: number; ville_depart: string; ville_arrivee: string; date_depart: string; heure_depart: string; prix: number; };
-  nombre_places: number;
-  passager_nom: string;
-  passager_tel: string;
-  statut: string;
-}
-
 @Component({
   selector: 'app-client-paiement',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, RouterLink],
   templateUrl: './client-paiement.html',
-  styleUrl: './client-paiement.scss'
+  styleUrls: ['./client-paiement.scss']
 })
 export class ClientPaiement implements OnInit {
   private readonly apiUrl = environment.apiUrl;
-  paiementForm!: FormGroup;
-  reservation: ReservationSummary | null = null;
+
+  reservation: any = null;
   loading = true;
   processing = false;
   success = false;
   errorText = '';
-  selectedMethod: 'orange_money' | 'mtn_momo' | 'carte' = 'orange_money';
+
+  selectedMethod = 'orange_money';
+  progress = 0;
+  progressText = '';
+  reservationId: number | null = null;
 
   constructor(
     private route: ActivatedRoute,
-    private fb: FormBuilder,
     private http: HttpClient,
-    private router: Router,
-    private auth: AuthService
+    public router: Router,
+    private auth: AuthService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
     if (!this.auth.isLoggedIn()) {
-      this.router.navigate(['/login'], { queryParams: { return: this.router.url } });
+      this.router.navigate(['/login']);
       return;
     }
 
-    const resId = this.route.snapshot.queryParamMap.get('reservationId');
-    
-    if (resId) {
-      // ✅ Mode normal : paiement d'une réservation spécifique
-      this.loadReservationSummary(Number(resId));
+    const idParam = this.route.snapshot.queryParamMap.get('reservationId');
+
+    if (idParam) {
+      this.reservationId = Number(idParam);
+      this.loadReservation();
     } else {
-      // ✅ Fallback : pas d'ID → redirection vers les trajets
-      console.warn('⚠️ Accès à /client/paiement sans reservationId. Redirection...');
-      this.router.navigate(['/client/trajets']);
+      this.errorText = 'Aucune réservation à payer.';
+      this.loading = false;
+      this.cdr.detectChanges();
     }
   }
 
-  loadReservationSummary(id: number): void {
+  loadReservation(): void {
     this.loading = true;
-    this.http.get<ReservationSummary>(`${this.apiUrl}/reservations/${id}/`).subscribe({
+    this.errorText = '';
+    this.cdr.detectChanges();
+
+    this.http.get<any>(`${this.apiUrl}/reservations/${this.reservationId}/`).subscribe({
       next: (data) => {
         this.reservation = data;
-        this.initForm();
         this.loading = false;
-      },
-      error: (err) => {
-        console.error('Erreur chargement réservation:', err);
-        this.errorText = 'Impossible de charger les détails de la réservation.';
-        this.loading = false;
-        setTimeout(() => this.router.navigate(['/client/trajets']), 2000);
-      }
-    });
-  }
-
-  private initForm(): void {
-    this.paiementForm = this.fb.group({
-      transaction_id: [''],
-      telephone_paiement: ['', [Validators.required, Validators.pattern(/^[0-9]{9,15}$/)]]
-    });
-    this.updatePhoneValidation();
-  }
-
-  setMethod(method: 'orange_money' | 'mtn_momo' | 'carte'): void {
-    this.selectedMethod = method;
-    this.updatePhoneValidation();
-  }
-
-  private updatePhoneValidation(): void {
-    const phoneControl = this.paiementForm.get('telephone_paiement');
-    if (this.selectedMethod === 'carte') {
-      phoneControl?.clearValidators();
-      phoneControl?.setValue(null);
-    } else {
-      phoneControl?.setValidators([Validators.required, Validators.pattern(/^[0-9]{9,15}$/)]);
-    }
-    phoneControl?.updateValueAndValidity();
-  }
-
-  processPayment(): void {
-    if (this.paiementForm.invalid || !this.reservation) {
-      this.paiementForm.markAllAsTouched();
-      return;
-    }
-
-    this.processing = true;
-    this.errorText = '';
-    this.success = false;
-
-    const prixUnitaire = this.reservation.trajet?.prix || this.reservation.trajet_detail?.prix || 0;
-    const nombrePlaces = this.reservation.nombre_places || 1;
-    const montantTotal = prixUnitaire * nombrePlaces;
-
-    const payload = {
-      reservation: this.reservation.id,
-      montant: montantTotal,
-      methode: this.selectedMethod,
-      transaction_id: this.paiementForm.value.transaction_id?.trim() || null,
-      telephone_paiement: this.selectedMethod !== 'carte' 
-        ? this.paiementForm.value.telephone_paiement?.trim() 
-        : null
-    };
-
-    console.log('📤 Payload paiement:', payload);
-
-    this.http.post<{ id?: number; detail?: string }>(`${this.apiUrl}/paiements/`, payload).subscribe({
-      next: (response) => {
-        console.log('✅ Paiement enregistré:', response);
-        this.processing = false;
-        this.success = true;
-        
-        setTimeout(() => {
-          this.router.navigate(['/client/mes-reservations']);
-        }, 2500);
+        this.cdr.detectChanges();
       },
       error: (err: HttpErrorResponse) => {
-        console.error('❌ Erreur paiement:', err);
-        this.processing = false;
-        
+        this.loading = false;
         if (err.status === 0) {
-          this.errorText = '🔌 Serveur injoignable. Vérifiez votre connexion.';
-        } else if (err.error?.montant) {
-          this.errorText = `Montant: ${err.error.montant[0]}`;
-        } else if (err.error?.telephone_paiement) {
-          this.errorText = `Téléphone: ${err.error.telephone_paiement[0]}`;
-        } else if (err.error?.reservation) {
-          this.errorText = `Réservation: ${err.error.reservation[0]}`;
-        } else if (err.error?.detail) {
-          this.errorText = err.error.detail;
-        } else if (err.error?.non_field_errors) {
-          this.errorText = err.error.non_field_errors[0];
+          this.errorText = '🔌 Serveur injoignable';
+        } else if (err.status === 404) {
+          this.errorText = '❌ Réservation non trouvée';
         } else {
-          this.errorText = 'Erreur lors du traitement du paiement. Réessayez.';
+          this.errorText = 'Erreur ' + err.status;
         }
+        this.cdr.detectChanges();
       }
     });
   }
 
-  getUserName(): string {
-    const user = this.auth.getCurrentUser();
-    return user?.first_name || user?.username || 'Client';
+  // ✅ HELPERS POUR LE RÉCAPITULATIF
+
+  private getTrajet(): any {
+    return this.reservation?.trajet_detail || this.reservation?.trajet || {};
   }
 
-  getUserEmail(): string {
-    const user = this.auth.getCurrentUser();
-    return user?.email || '';
+  getRoute(): string {
+    const t = this.getTrajet();
+    return (t.ville_depart || '...') + ' → ' + (t.ville_arrivee || '...');
   }
 
-  getUserAvatar(): string {
-    const user = this.auth.getCurrentUser();
-    const initials = user?.first_name?.charAt(0) || user?.username?.charAt(0) || 'C';
-    return `https://ui-avatars.com/api/?name=${initials}&background=667eea&color=fff&size=128`;
+  getDate(): string {
+    const t = this.getTrajet();
+    if (!t.date_depart) return 'N/A';
+    const d = new Date(t.date_depart);
+    return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' à ' + (t.heure_depart || '');
   }
 
-  logout(): void {
-    if (confirm('Voulez-vous vraiment vous déconnecter ?')) {
-      this.auth.logout();
-    }
+  getPrice(): number {
+    const t = this.getTrajet();
+    return Number(t.prix) || 0;
   }
 
-  formatPrice(price: number): string {
-    return new Intl.NumberFormat('fr-FR').format(price) + ' FCFA';
+  getPriceFormatted(): string {
+    return new Intl.NumberFormat('fr-FR').format(this.getPrice()) + ' FCFA';
   }
 
-  get totalPrice(): number {
-    if (!this.reservation) return 0;
-    const prix = this.reservation.trajet?.prix || this.reservation.trajet_detail?.prix || 0;
-    const places = this.reservation.nombre_places || 1;
-    return prix * places;
+  getNumberOfPlaces(): number {
+    return this.reservation?.nombre_places || 1;
   }
 
-  cancel(): void {
-    if (confirm('Annuler le paiement ? Vous pourrez reprendre plus tard.')) {
-      this.router.navigate(['/client/trajets']);
-    }
+  getTotal(): number {
+    return this.getPrice() * this.getNumberOfPlaces();
   }
 
-  get f() { return this.paiementForm.controls; }
+  getTotalFormatted(): string {
+    return new Intl.NumberFormat('fr-FR').format(this.getTotal()) + ' FCFA';
+  }
+
+  getPaymentSummary(): string {
+    const unit = this.getPriceFormatted();
+    const qty = this.getNumberOfPlaces();
+    const total = this.getTotalFormatted();
+    return `${unit} × ${qty} place${qty > 1 ? 's' : ''} = ${total}`;
+  }
+
+  getPassengerName(): string {
+    return this.reservation?.passager_nom || this.auth.getCurrentUser()?.username || 'Client';
+  }
+
+  getPassengerPhone(): string {
+    return this.reservation?.passager_tel || 'Non renseigné';
+  }
+
+  // ✅ SIMULATION PAIEMENT (barre de progression)
+  simulatePayment(): void {
+    this.processing = true;
+    this.progress = 0;
+    this.progressText = 'Connexion sécurisée...';
+    this.cdr.detectChanges();
+
+    const steps = [
+      { p: 20, t: 'Vérification...' },
+      { p: 45, t: 'Chiffrement...' },
+      { p: 70, t: 'Transmission...' },
+      { p: 90, t: 'Validation...' },
+      { p: 100, t: 'Accepté !' }
+    ];
+
+    let i = 0;
+    const interval = setInterval(() => {
+      if (i < steps.length) {
+        this.progress = steps[i].p;
+        this.progressText = steps[i].t;
+        this.cdr.detectChanges();
+        i++;
+      } else {
+        clearInterval(interval);
+        this.confirmPayment();
+      }
+    }, 600);
+  }
+
+  // ✅ CORRECTION : appel correct vers POST /paiements/ au lieu d'un PATCH direct
+  confirmPayment(): void {
+    if (!this.reservationId) return;
+
+    // Génération d'un transaction_id simulé unique
+    const transactionId = `SIM-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+    const payload = {
+      reservation: this.reservationId,
+      montant: this.getTotal(),
+      methode: this.selectedMethod,
+      transaction_id: transactionId,
+      telephone_paiement: this.reservation?.passager_tel || null
+    };
+
+    this.http.post(`${this.apiUrl}/paiements/`, payload).subscribe({
+      next: () => {
+        this.success = true;
+        this.processing = false;
+        this.cdr.detectChanges();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.processing = false;
+        this.errorText = err.error?.detail || err.error?.non_field_errors?.[0] || 'Échec du paiement. Réessayez.';
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  retry(): void {
+    if (this.reservationId) this.loadReservation();
+  }
 }

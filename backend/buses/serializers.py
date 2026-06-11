@@ -7,8 +7,8 @@ class BusSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Bus
-        fields = ['id', 'matricule', 'capacite', 'type_bus', 'agence', 'agence_nom', 'places_creees']
-        read_only_fields = ['id', 'places_creees']
+        fields = ['id', 'matricule', 'capacite', 'type_bus', 'agence', 'agence_nom', 'places_creees', 'is_active', 'date_creation']
+        read_only_fields = ['id', 'places_creees', 'date_creation']
 
     def validate_capacite(self, value):
         if value <= 0 or value > 100:

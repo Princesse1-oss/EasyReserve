@@ -13,12 +13,14 @@ class Bus(models.Model):
     matricule = models.CharField(max_length=50, unique=True)
     capacite = models.PositiveIntegerField()
     type_bus = models.CharField(max_length=20, choices=TYPE_CHOICES, default='standard')
-    
+    is_active = models.BooleanField(default=True)
+    date_creation = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+
     # Association stricte à une agence
     agence = models.ForeignKey(
-       'agences.Agence', 
+       'agences.Agence',
         on_delete=models.CASCADE,
-        null=True,                  
+        null=True,
         blank=True,
         related_name='buses'
     )

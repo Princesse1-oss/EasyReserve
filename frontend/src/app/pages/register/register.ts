@@ -1,21 +1,30 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { ReactiveFormsModule, FormBuilder, FormGroup, Validators, AbstractControl } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
+
+function passwordMatchValidator(control: AbstractControl): { [key: string]: boolean } | null {
+  const p = control.get('password');
+  const p2 = control.get('password_confirm');
+  if (p && p2 && p.value !== p2.value) return { passwordMismatch: true };
+  return null;
+}
 
 @Component({
   selector: 'app-register',
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, RouterModule],
   templateUrl: './register.html',
-  styleUrls: ['./register.css']
+  styleUrl: './register.scss',
 })
 export class Register {
   registerForm: FormGroup;
-  errorMessage: string = '';
-  successMessage: string = '';
-  isLoading: boolean = false;
+  loading = false;
+  erreur = '';
+  succes = '';
+  showPassword = false;
+  showPassword2 = false;
 
   constructor(
     private fb: FormBuilder,
@@ -23,103 +32,76 @@ export class Register {
     private router: Router
   ) {
     this.registerForm = this.fb.group({
-      email: ['', [Validators.required, Validators.email]],
       username: ['', [Validators.required, Validators.minLength(3)]],
-      first_name: [''],
-      last_name: [''],
-      telephone: [''],  // ✅ Ajouté pour cohérence avec le modèle User
+      email: ['', [Validators.required, Validators.email]],
       password: ['', [Validators.required, Validators.minLength(8)]],
-      password_confirm: ['', [Validators.required]]
-    }, { validator: this.passwordMatchValidator });
+      password_confirm: ['', Validators.required],
+    }, { validators: passwordMatchValidator });
+
+    if (this.authService.isLoggedIn()) {
+      this.redirigerSelonRole();
+    }
   }
 
-  passwordMatchValidator(g: FormGroup) {
-    return g.get('password')?.value === g.get('password_confirm')?.value
-      ? null : { 'mismatch': true };
+  get username() { return this.registerForm.get('username'); }
+  get email() { return this.registerForm.get('email'); }
+  get password() { return this.registerForm.get('password'); }
+  get password_confirm() { return this.registerForm.get('password_confirm'); }
+
+  togglePassword(): void { this.showPassword = !this.showPassword; }
+  togglePassword2(): void { this.showPassword2 = !this.showPassword2; }
+
+  getPasswordStrength(): string {
+    const pwd = this.password?.value || '';
+    if (pwd.length < 6) return 'faible';
+    if (pwd.length < 10 || !/[A-Z]/.test(pwd) || !/[0-9]/.test(pwd)) return 'moyen';
+    return 'fort';
+  }
+
+  getPasswordStrengthLabel(): string {
+    const s = this.getPasswordStrength();
+    if (s === 'faible') return 'Faible';
+    if (s === 'moyen') return 'Moyen';
+    return 'Fort';
+  }
+
+  redirigerSelonRole(): void {
+    const user = this.authService.getCurrentUser();
+    if (!user) { this.router.navigate(['/login']); return; }
+    switch (user.role) {
+      case 'ADMIN':
+      case 'GESTIONNAIRE':
+        this.router.navigate(['/Gestionnaire']);
+        break;
+      case 'CLIENT':
+        this.router.navigate(['/client/trajets']);
+        break;
+      default:
+        this.router.navigate(['/login']);
+    }
   }
 
   onSubmit(): void {
-    // ✅ 1. Validation du formulaire
-    if (this.registerForm.invalid) {
-      this.registerForm.markAllAsTouched();
-      this.errorMessage = 'Veuillez corriger les erreurs dans le formulaire.';
-      return;
-    }
+    if (this.registerForm.invalid) return;
+    this.loading = true;
+    this.erreur = '';
+    this.succes = '';
 
-    this.isLoading = true;
-    this.errorMessage = '';
-    this.successMessage = '';
+    const { username, email, password } = this.registerForm.value;
+    // password_confirm n'est pas envoyé au backend — validation uniquement côté frontend
 
-    // ✅ 2. Construction du payload avec rôle CLIENT par défaut
-    const formValue = this.registerForm.value;
-    const payload = {
-      email: formValue.email?.trim()?.toLowerCase(),
-      username: formValue.username?.trim(),
-      first_name: formValue.first_name?.trim() || '',
-      last_name: formValue.last_name?.trim() || '',
-      telephone: formValue.telephone?.trim() || '',
-      password: formValue.password,
-      password_confirm: formValue.password_confirm,
-      role: 'CLIENT' as const 
-    };
-
-    console.log('📤 Payload inscription:', payload);
-
-    // ✅ 3. Appel au service d'authentification
-    this.authService.register(payload).subscribe({
-      next: ({ user }) => {
-        console.log('✅ Inscription réussie, utilisateur:', user);
-        this.successMessage = '✅ Inscription réussie ! Redirection...';
-        this.isLoading = false;
-        
-        // ✅ 4. Redirection selon le rôle (avec délai pour afficher le message)
-        setTimeout(() => {
-          switch (user.role) {
-            case 'CLIENT':
-              // 🎫 Client → Page publique de recherche de trajets
-              console.log('🔀 Redirection CLIENT → /client/trajets');
-              this.router.navigate(['/client/clients']);
-              break;
-            case 'GESTIONNAIRE':
-              // 👨‍💼 Gestionnaire → Dashboard protégé
-              console.log('🔀 Redirection GESTIONNAIRE → /dashboard');
-              this.router.navigate(['/dashboard']);
-              break;
-            case 'ADMIN':
-              // 👑 Admin → Dashboard complet
-              console.log('🔀 Redirection ADMIN → /dashboard');
-              this.router.navigate(['/dashboard']);
-              break;
-            default:
-              // 🔒 Fallback sécurisé en cas de rôle inconnu
-              console.warn('⚠️ Rôle inconnu, redirection vers login');
-              this.router.navigate(['/login']);
-          }
-        }, 1500);
+    this.authService.register({ username, email, password }).subscribe({
+      next: () => {
+        this.loading = false;
+        this.succes = 'Compte créé avec succès ! Redirection...';
+        setTimeout(() => this.router.navigate(['/login']), 2000);
       },
       error: (err) => {
-        console.error('❌ Erreur inscription:', err);
-        this.isLoading = false;
-        
-        // ✅ 5. Gestion précise des erreurs Django
-        if (err.status === 0) {
-          this.errorMessage = '🔌 Serveur injoignable. Vérifiez que Django tourne.';
-        } else if (err.error?.username) {
-          this.errorMessage = `Username: ${err.error.username[0]}`;
-        } else if (err.error?.email) {
-          this.errorMessage = `Email: ${err.error.email[0]}`;
-        } else if (err.error?.password) {
-          this.errorMessage = `Mot de passe: ${err.error.password[0]}`;
-        } else if (err.error?.password_confirm) {
-          this.errorMessage = `Confirmation: ${err.error.password_confirm[0]}`;
-        } else if (err.error?.non_field_errors) {
-          this.errorMessage = err.error.non_field_errors[0];
-        } else if (err.error?.telephone) {
-          this.errorMessage = `Téléphone: ${err.error.telephone[0]}`;
-        } else {
-          this.errorMessage = 'Une erreur est survenue. Réessayez.';
-        }
-      }
+        this.loading = false;
+        if (err.error?.username) this.erreur = 'Ce nom est déjà pris.';
+        else if (err.error?.email) this.erreur = 'Cet email est déjà utilisé.';
+        else this.erreur = 'Erreur serveur. Veuillez réessayer.';
+      },
     });
   }
 }

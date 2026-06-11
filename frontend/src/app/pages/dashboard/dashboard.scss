@@ -806,3 +806,18 @@ select {
 .badge-actif { background: #d4edda; color: #155724; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
 .badge-inactif { background: #f8d7da; color: #721c24; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
 .gestionnaire-actions { display: flex; flex-direction: column; gap: 6px; }
+
+// ✅ Nouvelles couleurs de cartes stats
+.stat-card {
+  transition: transform 0.2s, box-shadow 0.2s;
+
+  &.purple { border-top-color: #6f42c1; }
+  &.green-light { border-top-color: #28a745; }
+  &.yellow { border-top-color: #ffc107; cursor: pointer; }
+  &.teal { border-top-color: #17a2b8; }
+
+  &.orange, &.purple, &.teal {
+    cursor: pointer;
+    &:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,.12); }
+  }
+}

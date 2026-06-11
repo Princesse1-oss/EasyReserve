@@ -13,20 +13,41 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token = super().get_token(user)
         token['username'] = user.username
         token['email'] = user.email
+        token['first_name'] = user.first_name or ''
+        token['last_name'] = user.last_name or ''
+        token['telephone'] = getattr(user, 'telephone', '') or ''
         token['role'] = str(getattr(user, 'role', 'CLIENT')).upper()
-        if hasattr(user, 'agence_id') and user.agence_id:
-            token['agence_id'] = user.agence_id
+        token['is_active'] = user.is_active
+        # Récupère l'agence via la relation inverse (agence liée au gestionnaire)
+        agence_id = None
+        if hasattr(user, 'agence') and user.agence:
+            agence_id = user.agence.id
+        token['agence_id'] = agence_id
         return token
 
-# ✅ CE CLASSIQUE ÉTAIT MANQUANT (requis par views.py)
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False, min_length=8)
     telephone = serializers.CharField(required=False, allow_blank=True, default='')
+    profile_picture = serializers.ImageField(required=False, allow_null=True)
+    
+    # ✅ CORRECTION : Définir agence_id explicitement pour éviter le crash DRF
+    agence_id = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'username', 'first_name', 'last_name', 'telephone', 'role', 'password', 'date_joined', 'agence_id']
-        read_only_fields = ['id', 'date_joined']
+        fields = [
+            'id', 'email', 'username', 'first_name', 'last_name', 
+            'telephone', 'role', 'password', 'date_joined', 
+            'profile_picture', 'agence_id'  # ✅ Maintenant valide
+        ]
+        read_only_fields = ['id', 'date_joined', 'username', 'role', 'agence_id']
+
+    def get_agence_id(self, obj):
+        # ✅ Sécurité : retourne l'ID de l'agence seulement si l'utilisateur est gestionnaire
+        # Utilise la relation inverse. Adaptez 'agence' si votre related_name est différent
+        if hasattr(obj, 'agence') and obj.agence:
+            return obj.agence.id
+        return None
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)
@@ -39,14 +60,45 @@ class UserSerializer(serializers.ModelSerializer):
             user.save()
         return user
 
+    def update(self, instance, validated_data):
+        # ✅ Gestion explicite de l'image de profil
+        profile_pic = validated_data.pop('profile_picture', None)
+        if profile_pic is not None:
+            instance.profile_picture = profile_pic
+        
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        instance.save()
+        return instance
+
     def validate_role(self, value):
         choices = ['ADMIN', 'GESTIONNAIRE', 'CLIENT']
         value_upper = str(value).upper()
         if value_upper not in choices:
             raise serializers.ValidationError(f"Le rôle doit être l'un des suivants : {choices}")
         return value_upper
+               
+class AdminGestionnaireSerializer(serializers.ModelSerializer):
+    # ✅ Force l'extraction du nom de l'agence même si la relation est indirecte
+    agence_nom = serializers.SerializerMethodField()
+    agence_id = serializers.IntegerField(source='agence.id', read_only=True)
 
-# ✅ NOUVEAU : Inscription sans password_confirm + email auto
+    class Meta:
+        model = User
+        fields = [
+            'id', 'username', 'email', 'first_name', 'last_name',
+            'role', 'is_active', 'date_joined', 'agence_nom', 'agence_id'
+        ]
+        read_only_fields = ['id', 'date_joined']
+
+    def get_agence_nom(self, obj):
+        # ✅ Sécurité : vérifie si l'agence existe avant d'appeler .nom
+        if hasattr(obj, 'agence') and obj.agence:
+            return obj.agence.nom
+        return "Non assignée"
+
+# ✅ Serializer d'inscription avec email auto + gestion agence
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False, min_length=8)
     role = serializers.CharField(required=False, default='CLIENT')
@@ -55,7 +107,10 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'username', 'password', 'first_name', 'last_name', 'telephone', 'role', 'agence_id']
+        fields = [
+            'id', 'email', 'username', 'password', 'first_name', 
+            'last_name', 'telephone', 'role', 'agence_id'
+        ]
         read_only_fields = ['id']
 
     def create(self, validated_data):
@@ -77,24 +132,25 @@ class RegisterSerializer(serializers.ModelSerializer):
             role=role
         )
 
-        # Liaison agence
+        # Liaison agence si gestionnaire
         if agence_id and role == 'GESTIONNAIRE':
             try:
                 from agences.models import Agence
                 agence = Agence.objects.get(id=agence_id)
                 agence.gestionnaire = user
                 agence.save()
-                print(f"✅ Agence '{agence.nom}' liée au gestionnaire '{user.username}'")
+                print(f"Agence '{agence.nom}' liée au gestionnaire '{user.username}'")
             except Exception as e:
-                print(f"⚠️ Erreur liaison agence: {e}")
+                print(f"Erreur liaison agence: {e}")
 
-        # Envoi email
+        # Envoi email de bienvenue (uniquement pour gestionnaires)
         if role == 'GESTIONNAIRE' and user.email:
             self._send_welcome_email(user, raw_password, agence_id)
 
         return user
 
     def _send_welcome_email(self, user, password, agence_id=None):
+        """Envoie l'email de bienvenue avec identifiants"""
         agence_nom = "Non assignée"
         if agence_id:
             try:
@@ -129,6 +185,6 @@ L'équipe EasyReserve
                 recipient_list=[user.email],
                 fail_silently=False,
             )
-            print(f"✅ Email envoyé à {user.email}")
+            print(f"Email envoyé à {user.email}")
         except Exception as e:
-            print(f"⚠️ Échec envoi email: {e}")
+            print(f"Échec envoi email: {e}")

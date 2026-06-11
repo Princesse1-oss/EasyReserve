@@ -35,25 +35,38 @@ class PaiementSerializer(serializers.ModelSerializer):
     def validate_reservation(self, value):
         """Vérifie que la réservation existe, appartient au client, et n'est pas déjà payée."""
         request = self.context.get('request')
-        
+
         if not value:
             raise serializers.ValidationError("Réservation requise.")
-        
+
         # Vérifier que la réservation appartient au client connecté
         if request and hasattr(request, 'user') and request.user.role == 'CLIENT':
             if value.client != request.user:
                 raise serializers.ValidationError("Vous ne pouvez pas payer pour une réservation qui ne vous appartient pas.")
-        
+
         # Vérifier que la réservation n'a pas déjà un paiement valide
         if value.paiement_set.filter(statut='valide').exists():
             raise serializers.ValidationError("Cette réservation a déjà été payée.")
-        
-        # Vérifier que la réservation est encore valide (pas annulée, places disponibles)
+
+        # Vérifier que la réservation est encore valide (pas annulée)
         if value.statut == 'annulee':
             raise serializers.ValidationError("Cette réservation est annulée.")
+
+        # ✅ BLOCAGE : voyage déjà passé
+        from django.utils import timezone
+        if value.trajet.date_depart < timezone.now().date():
+            raise serializers.ValidationError("Paiement impossible : ce voyage est déjà passé.")
+
+        # ✅ BLOCAGE : trajet déjà parti
+        if getattr(value.trajet, 'statut_depart', None) == 'parti':
+            raise serializers.ValidationError("Paiement impossible : ce trajet est déjà parti.")
+
+        # ✅ BLOCAGE : plus assez de places
         if value.trajet.places_disponibles < value.nombre_places:
-            raise serializers.ValidationError("Plus assez de places disponibles pour ce trajet.")
-            
+            raise serializers.ValidationError(
+                f"Paiement impossible : seulement {value.trajet.places_disponibles} place(s) disponible(s)."
+            )
+
         return value
 
     def validate_montant(self, value):

@@ -50,3 +50,9 @@ def envoyer_notification_reservation(sender, instance, created, **kwargs):
                 email.send(fail_silently=True)
             except Exception:
                 pass
+
+@receiver(post_save, sender=Reservation)
+def trigger_sms_on_confirm(sender, instance, created, **kwargs):
+    """Déclenche l'envoi SMS après création d'une réservation confirmée"""
+    if created and instance.statut == 'confirmee' and instance.passager_tel:
+        send_reservation_sms_task.delay(instance.id)

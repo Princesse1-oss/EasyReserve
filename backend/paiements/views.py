@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
-from django.db.models import Sum
+from django.db.models import Sum, Count
 from django.utils import timezone
 import logging
 
@@ -57,19 +57,35 @@ class PaiementViewSet(viewsets.ModelViewSet):
         """Création d'un paiement avec validation automatique pour le MVP."""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
+        reservation = serializer.validated_data['reservation']
+        trajet = reservation.trajet
+
+        # ✅ BLOCAGE 1 : Voyage déjà passé
+        if trajet.date_depart < timezone.now().date():
+            return Response(
+                {'detail': 'Paiement impossible : ce voyage est déjà passé.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # ✅ BLOCAGE 2 : Voyage complet (plus de places)
+        if trajet.places_disponibles < reservation.nombre_places:
+            return Response(
+                {'detail': f'Paiement impossible : seulement {trajet.places_disponibles} place(s) disponible(s).'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         paiement = serializer.save(
-            statut='valide',  # ✅ MVP : validation auto (simulation)
+            statut='valide',  # MVP : validation auto (simulation)
             date_paiement=timezone.now()
         )
-        
+
         # ✅ Mise à jour automatique de la réservation
-        reservation = paiement.reservation
         if reservation.statut != 'confirmee':
             reservation.statut = 'confirmee'
             reservation.save()
             logger.info(f"Réservation #{reservation.id} confirmée via paiement #{paiement.id}")
-        
+
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 

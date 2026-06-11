@@ -1,51 +1,110 @@
-<div class="auth-container">
-  <div class="auth-card">
-    <h2>Créer un compte</h2>
-    <p class="subtitle">Rejoignez-nous pour simplifier vos voyages</p>
+<div class="register-page">
 
-    <div *ngIf="errorMessage" class="error-banner">{{ errorMessage }}</div>
-    <div *ngIf="successMessage" class="success-banner">{{ successMessage }}</div>
+  <!-- Navbar -->
+  <nav class="register-nav">
+    <div class="nav-brand">
+      <div class="brand-logo">🚌</div>
+      <span>REBUS</span>
+    </div>
+    <div class="nav-right">
+      <span>Déjà membre ?</span>
+      <a routerLink="/login">Se connecter</a>
+    </div>
+  </nav>
+
+  <div class="register-card">
+    <div class="card-top-bar"></div>
+
+    <h2>Créer votre compte</h2>
+    <p class="subtitle">Rejoignez REBUS et planifiez vos trajets en toute sérénité.</p>
+
+    @if (erreur) { <div class="alert-error">{{ erreur }}</div> }
+    @if (succes) { <div class="alert-success">{{ succes }}</div> }
 
     <form [formGroup]="registerForm" (ngSubmit)="onSubmit()">
-      <div class="form-grid">
-        <div class="form-group">
-          <label for="first_name">Prénom</label>
-          <input type="text" id="first_name" formControlName="first_name" placeholder="John" />
+
+      <!-- Nom complet -->
+      <div class="form-group">
+        <div class="input-wrapper">
+          <span class="input-icon">👤</span>
+          <input type="text" formControlName="username" placeholder="Jean Dupont"/>
         </div>
-        <div class="form-group">
-          <label for="last_name">Nom</label>
-          <input type="text" id="last_name" formControlName="last_name" placeholder="Doe" />
+        @if (username?.invalid && username?.touched) {
+          <span class="field-error">Minimum 3 caractères.</span>
+        }
+      </div>
+
+      <!-- Email -->
+      <div class="form-group">
+        <div class="input-wrapper">
+          <span class="input-icon">✉️</span>
+          <input type="email" formControlName="email" placeholder="jean.dupont@exemple.com"/>
+        </div>
+        @if (email?.invalid && email?.touched) {
+          <span class="field-error">Email invalide.</span>
+        }
+      </div>
+
+      <!-- Mot de passe -->
+      <div class="form-group">
+        <div class="input-wrapper">
+          <span class="input-icon">🔒</span>
+          <input [type]="showPassword ? 'text' : 'password'"
+            formControlName="password" placeholder="••••••••"/>
+          <button type="button" class="eye-btn" (click)="togglePassword()">
+            {{ showPassword ? '🙈' : '👁️' }}
+          </button>
+        </div>
+        @if (password?.value) {
+          <div class="password-strength">
+            <span class="strength-label">Force du mot de passe :</span>
+            <span [class]="'strength-' + getPasswordStrength()">
+              {{ getPasswordStrengthLabel() }}
+            </span>
+          </div>
+        }
+      </div>
+
+      <!-- Confirmer mot de passe -->
+      <div class="form-group">
+        <div class="input-wrapper">
+          <span class="input-icon">🔒</span>
+          <input [type]="showPassword2 ? 'text' : 'password'"
+            formControlName="password_confirm" placeholder="••••••••"/>
+          <button type="button" class="eye-btn" (click)="togglePassword2()">
+            {{ showPassword2 ? '🙈' : '👁️' }}
+          </button>
+        </div>
+        @if (registerForm.hasError('passwordMismatch') && password_confirm?.touched) {
+          <span class="field-error">Les mots de passe ne correspondent pas.</span>
+        }
+      </div>
+
+      <!-- Compte Voyageur -->
+      <div class="account-type">
+        <div class="account-type-icon">🧳</div>
+        <div>
+          <strong>Compte Voyageur</strong>
+          <p>Accès complet à la recherche de bus, réservations et historique de trajets.</p>
         </div>
       </div>
 
-      <div class="form-group">
-        <label for="email">Adresse Email</label>
-        <input type="email" id="email" formControlName="email" placeholder="exemple@mail.com" />
-      </div>
-
-      <div class="form-group">
-        <label for="username">Nom d'utilisateur</label>
-        <input type="text" id="username" formControlName="username" placeholder="Ex: john_doe" />
-      </div>
-
-      <div class="form-group">
-        <label for="password">Mot de passe (8 caractères min.)</label>
-        <input type="password" id="password" formControlName="password" placeholder="••••••••" />
-      </div>
-
-      <div class="form-group">
-        <label for="password_confirm">Confirmer le mot de passe</label>
-        <input type="password" id="password_confirm" formControlName="password_confirm" placeholder="••••••••" />
-      </div>
-
-      <button type="submit" [disabled]="registerForm.invalid || isLoading" class="btn-primary">
-        <span *ngIf="!isLoading">S'inscrire</span>
-        <span *ngIf="isLoading">Création du compte...</span>
+      <!-- Bouton -->
+      <button type="submit" class="btn-submit" [disabled]="registerForm.invalid || loading">
+        {{ loading ? 'Création...' : 'Créer mon compte →' }}
       </button>
+
     </form>
 
-    <p class="auth-footer">
-      Déjà inscrit ? <a routerLink="/login">Se connecter</a>
-    </p>
   </div>
+
+  <!-- Footer -->
+  <footer class="page-footer">
+    <span>© 2024 REBUS. Tous droits réservés.</span>
+    <div class="footer-links">
+      <a href="#">Confidentialité</a>
+      <a href="#">Conditions</a>
+    </div>
+  </footer>
+
 </div>

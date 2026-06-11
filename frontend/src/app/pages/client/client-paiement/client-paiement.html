@@ -1,261 +1,154 @@
-<!-- ===== NAVBAR CLIENT PROFESSIONNELLE ===== -->
-<nav class="navbar-client shadow-sm">
-  <div class="container-fluid px-4">
-    
-    <!-- Logo -->
-    <div class="navbar-brand-wrapper">
-      <a class="navbar-brand" routerLink="/client/trajets">
-        <i class="bi bi-bus-front me-2"></i>
-        <span class="brand-text">EasyReserve</span>
-      </a>
-      <span class="badge bg-success ms-2">Espace Client</span>
-    </div>
-
-    <!-- Navigation -->
-    <div class="navbar-nav-custom">
-      <a routerLink="/client/mes-reservations" routerLinkActive="active" class="nav-item-custom">
-        <i class="bi bi-ticket-perforated-fill me-2"></i>
-        <span class="nav-text">Mes Réservations</span>
-      </a>
-      <a routerLink="/client/trajets" routerLinkActive="active" class="nav-item-custom">
-        <i class="bi bi-search me-2"></i>
-        <span class="nav-text">Nouveaux Trajets</span>
-      </a>
-    </div>
-
-    <!-- Profil Utilisateur avec Déconnexion -->
-    <div class="navbar-user-menu">
-      <div class="user-info">
-        <div class="user-avatar">
-          <img [src]="getUserAvatar()" alt="Avatar" class="avatar-img" />
-          <span class="user-name">{{ getUserName() }}</span>
-          <i class="bi bi-chevron-down ms-2"></i>
-        </div>
-        <div class="dropdown-menu-custom">
-          <div class="dropdown-header">
-            <strong>{{ getUserName() }}</strong>
-            <small>{{ getUserEmail() }}</small>
-          </div>
-          <a routerLink="/client/mes-reservations" class="dropdown-item">
-            <i class="bi bi-ticket-detailed me-2"></i>Mes Réservations
-          </a>
-          <a routerLink="/client/trajets" class="dropdown-item">
-            <i class="bi bi-search me-2"></i>Nouveaux Trajets
-          </a>
-          <div class="dropdown-divider"></div>
-          <!-- ✅ BOUTON DÉCONNEXION -->
-          <button (click)="logout()" class="dropdown-item text-danger">
-            <i class="bi bi-box-arrow-right me-2"></i>Déconnexion
-          </button>
-        </div>
-      </div>
-    </div>
-
-  </div>
+<!-- Navbar -->
+<nav class="navbar navbar-expand navbar-light bg-white shadow-sm px-3 py-2">
+  <a routerLink="/client/trajets" class="text-decoration-none d-flex align-items-center">
+    <i class="bi bi-arrow-left-circle text-primary me-2"></i>
+    <span class="fw-semibold">Retour</span>
+  </a>
+  <span class="ms-auto text-muted small">Espace Client</span>
 </nav>
 
-<!-- ===== CONTENU PRINCIPAL ===== -->
-<div class="main-content py-5">
-  <div class="container" style="max-width: 600px;">
-    
-    <!-- En-tête de page -->
-    <div class="text-center mb-5">
-      <h2 class="display-6 fw-bold text-primary mb-2">
-        <i class="bi bi-credit-card me-2"></i>Finaliser votre paiement
-      </h2>
-      <p class="text-muted">Paiement sécurisé • Transaction simulée pour le MVP</p>
+<div class="container py-4">
+  
+  <!-- LOADING STATE -->
+  @if (loading) {
+    <div class="text-center py-5">
+      <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+      <p class="text-muted mt-3 mb-0">Chargement du récapitulatif...</p>
+      <small class="text-muted">Réservation #{{ reservationId }}</small>
     </div>
+  }
 
-    <!-- État de chargement -->
-    @if (loading) {
-      <div class="card shadow-sm border-0">
-        <div class="card-body text-center py-5">
-          <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
-          <p class="mt-3 text-muted">Chargement des détails de la réservation...</p>
-        </div>
+  <!-- ERROR STATE -->
+  @else if (errorText) {
+    <div class="alert alert-danger shadow-sm">
+      <h6 class="fw-bold mb-2">
+        <i class="bi bi-exclamation-triangle me-2"></i>Erreur
+      </h6>
+      <p class="mb-0">{{ errorText }}</p>
+    </div>
+    <div class="text-center mt-4">
+      <button class="btn btn-primary me-2" (click)="retry()">
+        <i class="bi bi-arrow-clockwise me-1"></i>Réessayer
+      </button>
+      <button class="btn btn-outline-secondary" routerLink="/client/trajets">
+        Retour aux trajets
+      </button>
+    </div>
+  }
+
+  <!-- SUCCESS STATE -->
+  @else if (success) {
+    <div class="text-center py-5">
+      <div class="display-1 text-success mb-3">
+        <i class="bi bi-check-circle-fill"></i>
       </div>
-    }
-
-    <!-- Erreur -->
-    @else if (errorText && !success) {
-      <div class="alert alert-danger d-flex align-items-center shadow-sm">
-        <i class="bi bi-exclamation-triangle me-3 fs-4"></i>
-        <div>
-          <strong>Erreur</strong><br/>
-          {{ errorText }}
-        </div>
-      </div>
-      <div class="text-center mt-4">
-        <button class="btn btn-outline-primary" (click)="cancel()">
-          <i class="bi bi-arrow-left me-2"></i>Retour
-        </button>
-      </div>
-    }
-
-    <!-- Formulaire de paiement -->
-    @else if (reservation && !success) {
-      <div class="card payment-card shadow-sm border-0">
-        
-        <!-- Résumé de la réservation -->
-        <div class="card-header bg-gradient-primary text-white py-4">
-          <div class="text-center">
-            <h4 class="mb-2">{{ reservation.trajet?.ville_depart }} → {{ reservation.trajet?.ville_arrivee }}</h4>
-            <p class="mb-0 opacity-75">
-              <i class="bi bi-calendar3 me-2"></i>{{ reservation.trajet?.date_depart }} à {{ reservation.trajet?.heure_depart }}
-            </p>
-          </div>
-        </div>
-
-        <div class="card-body p-4">
-          
-          <!-- Détails du passager -->
-          <div class="bg-light rounded p-3 mb-4">
-            <div class="row text-center">
-              <div class="col-6 border-end">
-                <small class="text-muted d-block">Passager</small>
-                <strong>{{ reservation.passager_nom || 'N/A' }}</strong>
-              </div>
-              <div class="col-6">
-                <small class="text-muted d-block">Places</small>
-                <strong>{{ reservation.nombre_places || 1 }}</strong>
-              </div>
-            </div>
-          </div>
-
-          <!-- Formulaire -->
-          <form [formGroup]="paiementForm" (ngSubmit)="processPayment()">
-            
-            <!-- Moyen de paiement -->
-            <div class="mb-4">
-              <label class="form-label fw-semibold">
-                <i class="bi bi-wallet2 me-2 text-primary"></i>Moyen de paiement *
-              </label>
-              <div class="btn-group w-100" role="group">
-                <input type="radio" class="btn-check" name="methode" id="orange" value="orange_money" 
-                       [checked]="selectedMethod === 'orange_money'" (change)="setMethod('orange_money')">
-                <label class="btn btn-outline-warning" for="orange">🟠 Orange Money</label>
-
-                <input type="radio" class="btn-check" name="methode" id="mtn" value="mtn_momo" 
-                       [checked]="selectedMethod === 'mtn_momo'" (change)="setMethod('mtn_momo')">
-                <label class="btn btn-outline-warning" for="mtn">🟡 MTN MoMo</label>
-
-                <input type="radio" class="btn-check" name="methode" id="carte" value="carte" 
-                       [checked]="selectedMethod === 'carte'" (change)="setMethod('carte')">
-                <label class="btn btn-outline-primary" for="carte">💳 Carte</label>
-              </div>
-            </div>
-
-            <!-- Téléphone Mobile Money (conditionnel) -->
-            @if (selectedMethod !== 'carte') {
-              <div class="mb-4">
-                <label class="form-label fw-semibold">
-                  <i class="bi bi-telephone me-2 text-primary"></i>Numéro Mobile Money *
-                </label>
-                <input type="tel" formControlName="telephone_paiement" class="form-control form-control-lg" 
-                       placeholder="Ex: 699123456" [class.is-invalid]="f['telephone_paiement']?.invalid && f['telephone_paiement']?.touched"/>
-                @if (f['telephone_paiement']?.invalid && f['telephone_paiement']?.touched) {
-                  <small class="text-danger">9 à 15 chiffres requis</small>
-                }
-                <small class="text-muted">Le numéro auquel le débit sera effectué</small>
-              </div>
-            }
-
-            <!-- ID Transaction (optionnel) -->
-            <div class="mb-4">
-              <label class="form-label fw-semibold">
-                <i class="bi bi-hash me-2 text-primary"></i>ID de transaction (optionnel)
-              </label>
-              <input type="text" formControlName="transaction_id" class="form-control form-control-lg" 
-                     placeholder="Ex: OM-123456789" maxlength="100"/>
-              <small class="text-muted">Si vous avez déjà une référence de paiement</small>
-            </div>
-
-            <!-- Messages -->
-            @if (errorText) {
-              <div class="alert alert-danger mb-4">{{ errorText }}</div>
-            }
-
-            <!-- Résumé du total -->
-            <div class="card bg-light border-0 mb-4">
-              <div class="card-body py-3">
-                <div class="d-flex justify-content-between align-items-center">
-                  <span class="fw-semibold">Total à payer :</span>
-                  <span class="h4 text-success mb-0">{{ formatPrice(totalPrice) }}</span>
-                </div>
-                <small class="text-muted">{{ reservation.nombre_places || 1 }} place(s) × {{ formatPrice(reservation.trajet?.prix || reservation.trajet_detail?.prix || 0) }}</small>
-              </div>
-            </div>
-
-            <!-- Boutons -->
-            <div class="d-grid gap-3">
-              <button 
-                type="submit" 
-                class="btn btn-success btn-lg" 
-                [disabled]="processing || paiementForm.invalid">
-                @if (processing) {
-                  <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                  Traitement en cours...
-                } @else {
-                  <i class="bi bi-check-circle me-2"></i>Payer {{ formatPrice(totalPrice) }}
-                }
-              </button>
-              <button type="button" class="btn btn-outline-secondary btn-lg" (click)="cancel()">
-                <i class="bi bi-x-circle me-2"></i>Annuler
-              </button>
-            </div>
-
-          </form>
-        </div>
-      </div>
-    }
-
-    <!-- Succès -->
-    @else if (success) {
-      <div class="card shadow-sm border-0 text-center">
-        <div class="card-body py-5">
-          <div class="display-1 text-success mb-3">✅</div>
-          <h4 class="fw-bold mb-2">Paiement confirmé !</h4>
-          <p class="text-muted mb-4">Votre réservation est maintenant validée.</p>
-          <div class="spinner-border text-success" role="status"></div>
-          <p class="mt-3 text-muted small">Redirection vers l'historique...</p>
-        </div>
-      </div>
-    }
-
-  </div>
-</div>
-
-<!-- ===== FOOTER CLIENT EASYRESERVE ===== -->
-<footer class="footer-client">
-  <div class="container">
-    <div class="row align-items-center">
+      <h4 class="fw-bold mb-2">Paiement confirmé !</h4>
+      <p class="text-muted mb-4">Votre réservation #{{ reservationId }} est validée.</p>
       
-      <!-- Marque -->
-      <div class="col-md-4 text-center text-md-start mb-3 mb-md-0">
-        <a routerLink="/client/trajets" class="footer-brand">
-          <i class="bi bi-bus-front me-2"></i>EasyReserve
-        </a>
-        <small class="text-muted d-block mt-1">© 2026 Tous droits réservés</small>
+      <div class="alert alert-success mb-4">
+        <i class="bi bi-phone me-2"></i>
+        <strong>SMS envoyé au {{ reservation?.passager_tel }}</strong>
+        <br>
+        <small class="text-muted">Billet électronique en route.</small>
       </div>
 
-      <!-- Liens Espace Client -->
-      <div class="col-md-4 text-center mb-3 mb-md-0">
-        <small class="text-muted fw-semibold d-block mb-2">Espace Client</small>
-        <div class="footer-links">
-          <a routerLink="/client/trajets">🔍 Trajets</a>
-          <a routerLink="/client/mes-reservations">📋 Réservations</a>
-          <a routerLink="/client/paiement">💳 Paiement</a>
+      <div class="d-grid gap-2" style="max-width: 300px; margin: 0 auto;">
+        <button class="btn btn-primary btn-sm" routerLink="/client/reservations">
+          <i class="bi bi-list-check me-2"></i>Mes réservations
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" routerLink="/client/trajets">
+          Nouvelle recherche
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- PAYMENT FORM STATE -->
+  @else if (reservation) {
+    
+    <!-- Recap Card -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white border-bottom py-3">
+        <h6 class="mb-0 fw-semibold">
+          <i class="bi bi-receipt text-primary me-2"></i>Récapitulatif #{{ reservationId }}
+        </h6>
+      </div>
+      <div class="card-body p-3">
+        <div class="row g-3 mb-3">
+          <div class="col-6">
+            <small class="text-muted d-block">Trajet</small>
+            <strong class="text-primary d-block">{{ getRoute() }}</strong>
+          </div>
+          <div class="col-6">
+            <small class="text-muted d-block">Date & Heure</small>
+            <strong class="d-block">{{ getDate() }}</strong>
+          </div>
+          <div class="col-6">
+            <small class="text-muted d-block">Passager</small>
+            <strong class="d-block">{{ reservation.passager_nom || 'N/A' }}</strong>
+          </div>
+          <div class="col-6">
+            <small class="text-muted d-block">Téléphone</small>
+            <strong class="d-block">{{ reservation.passager_tel || 'N/A' }}</strong>
+          </div>
+          <div class="col-6">
+            <small class="text-muted d-block">Nombre de places</small>
+            <strong class="d-block">{{ reservation.nombre_places || 1 }}</strong>
+          </div>
+          <div class="col-6">
+            <small class="text-muted d-block">Prix unitaire</small>
+            <strong class="d-block">{{ getPriceFormatted() }}</strong>
+          </div>
+        </div>
+        
+        <div class="alert alert-light border d-flex justify-content-between align-items-center py-3 mb-0">
+          <span class="fw-semibold">Total à payer</span>
+          <span class="h4 text-success mb-0 fw-bold">{{ getTotalFormatted() }}</span>
         </div>
       </div>
-
-      <!-- Déconnexion -->
-      <div class="col-md-4 text-center text-md-end">
-        <button (click)="logout()" class="btn btn-outline-danger btn-sm">
-          <i class="bi bi-box-arrow-right me-2"></i>Déconnexion
-        </button>
-        <small class="text-muted d-block mt-2">Connecté en tant que <strong>{{ getUserName() }}</strong></small>
-      </div>
-
     </div>
-  </div>
-</footer>
+
+    <!-- Payment Method Card -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white border-bottom py-3">
+        <h6 class="mb-0 fw-semibold">
+          <i class="bi bi-wallet2 text-primary me-2"></i>Mode de paiement
+        </h6>
+      </div>
+      <div class="card-body p-3">
+        <div class="btn-group w-100" role="group">
+          <input type="radio" class="btn-check" name="method" id="om" value="orange_money" 
+                 [checked]="selectedMethod === 'orange_money'" (change)="selectedMethod = 'orange_money'">
+          <label class="btn btn-outline-warning btn-sm flex-fill" for="om">
+            🟠 Orange Money
+          </label>
+
+          <input type="radio" class="btn-check" name="method" id="mtn" value="mtn_momo" 
+                 [checked]="selectedMethod === 'mtn_momo'" (change)="selectedMethod = 'mtn_momo'">
+          <label class="btn btn-outline-warning btn-sm flex-fill" for="mtn">
+            🟡 MTN MoMo
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pay Button -->
+    <button class="btn btn-primary w-100 btn-lg" [disabled]="processing || success" (click)="simulatePayment()">
+      @if (processing) {
+        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+        {{ progressText }} ({{ progress }}%)
+      } @else {
+        <i class="bi bi-shield-lock me-2"></i>Simuler le paiement
+      }
+    </button>
+
+    <!-- Progress Bar -->
+    @if (progress > 0 && !success) {
+      <div class="progress mt-3" style="height: 8px;">
+        <div class="progress-bar bg-primary progress-bar-striped progress-bar-animated" 
+             [style.width.%]="progress"></div>
+      </div>
+      <small class="text-muted text-center d-block mt-2">{{ progressText }}</small>
+    }
+  }
+</div>

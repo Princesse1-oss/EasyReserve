@@ -4,71 +4,76 @@ from rest_framework.response import Response
 from django.utils import timezone
 from django.http import FileResponse
 from django.db.models import Sum
-import os
 
 from .models import Reservation
 from .serializers import ReservationSerializer
-# Assure-toi que ces permissions existent bien dans users.permissions
-from users.permissions import IsAdminUserCustom, IsGestionnaire, IsClient
+from .utils import generate_ticket
+
+from users.permissions import IsAdminUserCustom, IsGestionnaire
+
+from trajets.models import Trajet
+from buses.models import Bus
+from paiements.models import Paiement
+
 
 class ReservationViewSet(viewsets.ModelViewSet):
     serializer_class = ReservationSerializer
 
     def get_permissions(self):
-        """Permissions selon l'action."""
-        if self.action == 'confirmer' or self.action == 'statistiques':
+        if self.action in ['confirmer', 'statistiques', 'activites_gestionnaire']:
             return [IsAdminUserCustom() | IsGestionnaire()]
-        # Lecture publique pour la recherche, écriture nécessite auth
-        if self.action in ['list', 'retrieve']:
-            return [permissions.AllowAny()]
+        if self.action in ['list', 'retrieve', 'ticket', 'annuler']:
+            return [permissions.IsAuthenticated()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
         user = self.request.user
-        # Optimisation : select_related pour éviter les requêtes N+1
-        base_query = Reservation.objects.all().select_related('client', 'trajet', 'place', 'trajet__bus__agence')
+        base_query = Reservation.objects.all().select_related(
+            'client', 'trajet', 'trajet__bus', 'trajet__bus__agence'
+        )
 
-        if user.is_authenticated:
-            if getattr(user, 'role', None) == 'ADMIN':
-                return base_query
-            
-            if getattr(user, 'role', None) == 'GESTIONNAIRE' and hasattr(user, 'agence'):
-                return base_query.filter(trajet__bus__agence=user.agence)
-            
-            # Client voit ses réservations
-            return base_query.filter(client=user)
-        
-        # Utilisateur non connecté (pour recherche publique si besoin)
-        return base_query.none()
+        if not user.is_authenticated:
+            return Reservation.objects.none()
+
+        if getattr(user, 'role', None) == 'CLIENT':
+            return base_query.filter(client=user).order_by('-date_reservation')
+        elif getattr(user, 'role', None) == 'ADMIN':
+            return base_query.order_by('-date_reservation')
+        elif getattr(user, 'role', None) == 'GESTIONNAIRE' and hasattr(user, 'agence'):
+            return base_query.filter(trajet__bus__agence=user.agence).order_by('-date_reservation')
+
+        return Reservation.objects.none()
 
     def perform_create(self, serializer):
-        # Force le client à être l'utilisateur connecté
-        serializer.save(client=self.request.user)
+        instance = serializer.save(client=self.request.user)
+        if instance.trajet:
+            instance.trajet.refresh_from_db()
 
     @action(detail=True, methods=['post'])
     def annuler(self, request, pk=None):
         reservation = self.get_object()
+        user = request.user
 
-        # Vérifications de sécurité
+        if getattr(user, 'role', None) == 'CLIENT' and reservation.client != user:
+            return Response({'detail': 'Accès refusé.'}, status=status.HTTP_403_FORBIDDEN)
+
         if reservation.statut == 'annulee':
             return Response({'detail': 'Déjà annulée.'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        if reservation.trajet.date_depart < timezone.now().date():
-            return Response({'detail': 'Voyage passé.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Libération de la place (sécurisé)
-        if hasattr(reservation, 'place') and reservation.place:
-            reservation.place.disponible = True
-            reservation.place.save()
+        departure_date = reservation.trajet.date_depart
+        now = timezone.now().date()
+        if departure_date < now:
+            return Response(
+                {'detail': 'Annulation impossible : voyage déjà passé.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         reservation.statut = 'annulee'
         reservation.save()
-        
-        # Remettre les places disponibles au trajet
-        reservation.trajet.places_disponibles += reservation.nombre_places
-        reservation.trajet.save()
+        if reservation.trajet:
+            reservation.trajet.refresh_from_db()
 
-        return Response({'detail': 'Réservation annulée.'}, status=status.HTTP_200_OK)
+        return Response({'detail': 'Réservation annulée avec succès.'}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'])
     def confirmer(self, request, pk=None):
@@ -78,39 +83,141 @@ class ReservationViewSet(viewsets.ModelViewSet):
 
         reservation.statut = 'confirmee'
         reservation.save()
+        if reservation.trajet:
+            reservation.trajet.refresh_from_db()
         return Response({'detail': 'Réservation confirmée.'}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['get'])
     def ticket(self, request, pk=None):
         reservation = self.get_object()
-        
-        # Permission d'accès au billet
-        if request.user.role == 'CLIENT' and reservation.client != request.user:
-            return Response({'detail': 'Accès refusé.'}, status=status.HTTP_403_FORBIDDEN)
-            
-        try:
-            from .utils import generate_ticket
-            filename = generate_ticket(reservation)
-            return FileResponse(
-                open(filename, 'rb'),
-                as_attachment=True,
-                content_type='application/pdf'
-            )
-        except ImportError:
-            return Response({'detail': 'Génération PDF non configurée (utils manquant).'}, status=status.HTTP_501_NOT_IMPLEMENTED)
-        except Exception as e:
-            return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        user = request.user
 
+        if getattr(user, 'role', None) == 'CLIENT' and reservation.client != user:
+            return Response({'detail': 'Accès refusé.'}, status=status.HTTP_403_FORBIDDEN)
+        if reservation.statut != 'confirmee':
+            return Response(
+                {'detail': 'La réservation doit être confirmée pour télécharger le billet.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            pdf_buffer = generate_ticket(reservation)
+            filename = f"Billet_{reservation.id}_{reservation.passager_nom or 'Client'}.pdf"
+            return FileResponse(
+                pdf_buffer,
+                as_attachment=True,
+                content_type='application/pdf',
+                filename=filename
+            )
+        except Exception as e:
+            print(f"Erreur génération billet: {e}")
+            return Response(
+                {'detail': 'Erreur lors de la génération du billet.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(
+        detail=False,
+        methods=['get'],
+        url_path='activites-gestionnaire/(?P<gestionnaire_id>[^/.]+)'
+    )
+    def activites_gestionnaire(self, request, gestionnaire_id=None):
+        """
+        Permet à l'administrateur de consulter les statistiques
+        complètes d'un gestionnaire.
+        """
+        if getattr(request.user, 'role', None) != 'ADMIN':
+            return Response(
+                {'detail': 'Accès refusé.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        gestionnaire = User.objects.filter(
+            id=gestionnaire_id,
+            role='GESTIONNAIRE'
+        ).first()
+
+        if not gestionnaire:
+            return Response(
+                {'detail': 'Gestionnaire introuvable.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if not hasattr(gestionnaire, 'agence') or not gestionnaire.agence:
+            return Response(
+                {'detail': "Ce gestionnaire n'a pas d'agence assignée."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        agence = gestionnaire.agence
+
+        total_reservations = Reservation.objects.filter(
+            trajet__bus__agence=agence
+        ).count()
+
+        total_billets = Reservation.objects.filter(
+            trajet__bus__agence=agence,
+            statut='confirmee'
+        ).count()
+
+        total_trajets = Trajet.objects.filter(bus__agence=agence).count()
+        total_bus = Bus.objects.filter(agence=agence).count()
+
+        chiffre_affaires = Paiement.objects.filter(
+            reservation__trajet__bus__agence=agence,
+            statut='valide'
+        ).aggregate(total=Sum('montant'))['total'] or 0
+
+        capacite_totale = Trajet.objects.filter(
+            bus__agence=agence
+        ).aggregate(total=Sum('bus__capacite'))['total'] or 0
+
+        places_occupees = Reservation.objects.filter(
+            trajet__bus__agence=agence,
+            statut='confirmee'
+        ).aggregate(total=Sum('nombre_places'))['total'] or 0
+
+        taux_occupation = 0
+        if capacite_totale > 0:
+            taux_occupation = round((places_occupees / capacite_totale) * 100, 2)
+
+        return Response({
+            'gestionnaire': {
+                'id': gestionnaire.id,
+                'username': gestionnaire.username,
+                'email': gestionnaire.email,
+                'agence': agence.nom,
+            },
+            'statistiques': {
+                'chiffre_affaires': chiffre_affaires,
+                'total_reservations': total_reservations,
+                'total_billets': total_billets,
+                'total_trajets': total_trajets,
+                'total_bus': total_bus,
+                'taux_occupation': taux_occupation
+            }
+        })
+
+    # ✅ CORRECTION : méthode correctement indentée dans la classe
     @action(detail=False, methods=['get'])
     def statistiques(self, request):
         user = self.request.user
+
         queryset = Reservation.objects.filter(statut='confirmee')
 
-        if user.role == 'GESTIONNAIRE' and hasattr(user, 'agence'):
+        if (
+            getattr(user, 'role', None) == 'GESTIONNAIRE'
+            and hasattr(user, 'agence')
+        ):
             queryset = queryset.filter(trajet__bus__agence=user.agence)
 
         total = queryset.count()
-        revenus = queryset.aggregate(total_rev=Sum('trajet__prix'))['total_rev'] or 0
+        revenus = queryset.aggregate(
+            total_rev=Sum('trajet__prix')
+        )['total_rev'] or 0
 
         return Response({
             'total_confirmations': total,

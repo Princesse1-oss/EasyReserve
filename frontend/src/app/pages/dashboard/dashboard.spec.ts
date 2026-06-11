@@ -3,9 +3,10 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-import { AuthService, User } from '../../services/auth.service';
+import { AuthService } from '../../services/auth.service';
 import { ReservationService, Reservation } from '../../services/reservation.service';
 import { environment } from '../../../environments/environment';
+import { User } from '../client/client-profile/client-profile';
 
 interface Agence {
   id: number;
