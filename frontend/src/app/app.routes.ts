@@ -21,17 +21,26 @@ export const routes: Routes = [
   },
 
   // ===========================
-  // === DASHBOARD ADMIN / GESTIONNAIRE ===
+  // === DASHBOARD ADMIN ===
   // ===========================
   {
-    path: 'Gestionnaire',
+    path: 'dashboard',
     loadComponent: () => import('./pages/dashboard/dashboard').then((m) => m.Dashboard),
-    canActivate: [gestionnaireGuard],
+    canActivate: [adminGuard],
   },
-  // Alias lowercase pour éviter les erreurs de frappe
+
+  // ===========================
+  // === DASHBOARD GESTIONNAIRE ===
+  // ===========================
   {
     path: 'gestionnaire',
-    redirectTo: 'Gestionnaire',
+    loadComponent: () => import('./pages/gestionnaire/pageAG/gestionnaire').then((m) => m.GestionnaireComponent),
+    canActivate: [gestionnaireGuard],
+  },
+  // Alias pour compatibilité
+  {
+    path: 'Gestionnaire',
+    redirectTo: 'dashboard',
     pathMatch: 'full',
   },
 
@@ -56,6 +65,11 @@ export const routes: Routes = [
   {
     path: 'gestionnaire/paiement',
     loadComponent: () => import('./pages/gestionnaire/paiement/paiement').then((m) => m.Paiement),
+    canActivate: [gestionnaireGuard],
+  },
+  {
+    path: 'gestionnaire/chauffeurs',
+    loadComponent: () => import('./pages/gestionnaire/chauffeurs/chauffeurs').then((m) => m.GestionnaireChauffeurs),
     canActivate: [gestionnaireGuard],
   },
 

@@ -24,15 +24,7 @@ class TrajetSerializer(serializers.ModelSerializer):
         return "Non assignée"
 
     def get_places_disponibles(self, obj):
-        """✅ Calcule : Capacité du bus - Places déjà réservées & confirmées"""
-        if not obj.bus or not hasattr(obj.bus, 'capacite'):
-            return 0
-        capacite = obj.bus.capacite
-        reserved = Reservation.objects.filter(
-            trajet=obj, 
-            statut='confirmee'
-        ).aggregate(total=Sum('nombre_places'))['total'] or 0
-        return max(0, capacite - reserved)
+        return obj.places_disponibles
 
     def validate_date_depart(self, value):
         from django.utils import timezone

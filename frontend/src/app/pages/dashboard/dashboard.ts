@@ -1,5 +1,5 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
-import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
+import { CommonModule, DatePipe } from '@angular/common';
 import { RouterLink, Router } from '@angular/router';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { HttpClient, HttpHeaders, HttpErrorResponse } from '@angular/common/http';
@@ -51,7 +51,7 @@ interface Paiement {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterLink, ReactiveFormsModule, DatePipe, DecimalPipe],
+  imports: [CommonModule, RouterLink, ReactiveFormsModule, DatePipe],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
 })
@@ -135,7 +135,7 @@ export class Dashboard implements OnInit {
   ngOnInit(): void {
     this.user = this.authService.getCurrentUser();
     this.chargerReservations();
-    if (this.user?.role === 'ADMIN') {
+    if (this.isAdmin()) {
       this.chargerStatsGlobales();
       this.chargerAgences();
       this.chargerGestionnaires();
@@ -265,7 +265,7 @@ export class Dashboard implements OnInit {
         const gestionnairesData = allUsers.filter((u: any) => {
           return (u.agence_id != null && u.agence_id !== '') ||
                  (u.agence && (u.agence.id || u.agence.nom)) ||
-                 u.role === 'GESTIONNAIRE';
+                 String(u.role || '').toUpperCase() === 'GESTIONNAIRE';
         });
         this.gestionnaires = gestionnairesData.map((g: any) => ({
           id: g.id || 0, username: g.username || '', email: g.email || '',
@@ -300,6 +300,10 @@ export class Dashboard implements OnInit {
   get reservationsEnAttente(): number { return this.reservations.filter((r: any) => r.statut === 'en_attente').length; }
   get paiementsEnAttente(): Paiement[] { return this.paiements.filter(p => p.statut === 'en_attente'); }
 
+  isAdmin(): boolean {
+    return String(this.user?.role || '').toUpperCase() === 'ADMIN';
+  }
+
   get a_nom() { return this.agenceForm.get('nom'); }
   get a_adresse() { return this.agenceForm.get('adresse'); }
   get a_telephone() { return this.agenceForm.get('telephone'); }
@@ -307,6 +311,16 @@ export class Dashboard implements OnInit {
 
   formatPrix(n: number): string {
     return new Intl.NumberFormat('fr-FR').format(n) + ' FCFA';
+  }
+
+  getPaiementMethodLabel(m: string): string {
+    const labels: Record<string, string> = {
+      orange_money: 'Orange Money',
+      mtn_momo: 'MTN MoMo',
+      carte: 'Carte bancaire',
+      espece: 'Especes'
+    };
+    return labels[m] || m || '-';
   }
 
   getMethodeLabel(m: string): string {
@@ -397,6 +411,26 @@ export class Dashboard implements OnInit {
   fermerActivites(): void { this.showActivitesModal = false; this.gestionnaireSelectionne = null; this.activitesData = null; }
   voirDetailGestionnaire(g: Gestionnaire): void { this.gestionnaireSelectionne = g; this.showDetailGestionnaire = true; }
 
+  toggleGestionnaireStatus(g: Gestionnaire): void {
+    const willDeactivate = g.is_active;
+    const message = willDeactivate ? prompt(`Message pour ${g.username}:`, 'Compte desactive temporairement.') : '';
+    if (willDeactivate && message === null) return;
+    if (!confirm(`${willDeactivate ? 'Desactiver' : 'Activer'} "${g.username}" ?`)) return;
+
+    this.http.post(
+      `${this.apiUrl}/users/gestionnaires/${g.id}/${willDeactivate ? 'desactiver' : 'activer'}/`,
+      willDeactivate && message ? { message: message.trim() } : {},
+      { headers: this.getAuthHeaders() }
+    ).subscribe({
+      next: () => {
+        g.is_active = !g.is_active;
+        this.chargerGestionnaireCount();
+        alert(`${g.username} ${willDeactivate ? 'desactive' : 'active'}.`);
+      },
+      error: () => alert('Erreur lors du changement de statut.')
+    });
+  }
+
   toggleActivation(g: Gestionnaire): void {
     const willDeactivate = g.is_active;
     const message = willDeactivate ? prompt(`Message pour ${g.username}:`, 'Compte désactivé temporairement.') : '';
@@ -412,16 +446,28 @@ export class Dashboard implements OnInit {
   }
 
   voirActivites(g: Gestionnaire): void {
-    this.router.navigate(
-      [`/dashboard/gestionnaires/${g.id}/activites`],
-      { queryParams: { nom: g.username, agence: g.agence_nom } }
-    );
+    this.gestionnaireSelectionne = g;
+    this.loadingActivites = true;
+    this.showActivitesModal = true;
+    
+    this.http.get<ActivitesData>(`${this.apiUrl}/users/gestionnaires/${g.id}/activites/`, { headers: this.getAuthHeaders() })
+      .pipe(finalize(() => { this.loadingActivites = false; this.cdr.detectChanges(); }))
+      .subscribe({
+        next: (data) => {
+          this.activitesData = data;
+        },
+        error: () => {
+          alert("Erreur lors de la récupération des activités");
+          this.showActivitesModal = false;
+        }
+      });
   }
 
   modifierGestionnaire(g: Gestionnaire): void {
     this.gestionnaireAModifier = g; this.showModifierGestionnaire = true;
     this.modifGestionnaireForm.patchValue({ first_name: g.first_name, last_name: g.last_name || '', username: g.username, email: g.email, telephone: g.telephone || '', is_active: g.is_active });
   }
+
   fermerModifierGestionnaire(): void { this.showModifierGestionnaire = false; this.gestionnaireAModifier = null; }
 
   sauvegarderModificationGestionnaire(): void {

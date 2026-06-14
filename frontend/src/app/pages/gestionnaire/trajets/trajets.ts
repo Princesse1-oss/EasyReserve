@@ -86,6 +86,7 @@ export class GestionnaireTrajets implements OnInit {
   ngOnInit(): void {
     // ✅ Récupération de l'utilisateur connecté pour la topbar
     this.user = this.authService.getCurrentUser();
+    this.initForm();
     
     // ✅ DÉTECTION DU MODE ADMIN (nouveau)
     this.managerId = this.route.snapshot.paramMap.get('managerId');
@@ -98,7 +99,6 @@ export class GestionnaireTrajets implements OnInit {
       this.chargerDonneesPourGestionnaire(Number(this.managerId));
     } else {
       console.log('👤 Mode gestionnaire : chargement de mes trajets');
-      this.initForm();
       this.loadTrajets();
       this.loadBusDisponibles();
     }
@@ -113,6 +113,11 @@ export class GestionnaireTrajets implements OnInit {
       'Authorization': token ? `Bearer ${token}` : '',
       'Content-Type': 'application/json'
     });
+  }
+
+  onLogout(): void {
+    this.authService.logout();
+    this.router.navigate(['/login']);
   }
 
   // ✅ Charger les données DU gestionnaire ciblé (pour l'admin)
@@ -144,7 +149,7 @@ export class GestionnaireTrajets implements OnInit {
 
   // ✅ Retour au dashboard
   goBack(): void {
-    this.router.navigate(['/Gestionnaire']);
+    this.router.navigate([this.isAdminMode ? '/dashboard' : '/gestionnaire']);
   }
 
   // ==================== INITIALISATION ====================
@@ -266,8 +271,7 @@ export class GestionnaireTrajets implements OnInit {
       ville_arrivee: val.ville_arrivee.trim(),
       date_depart: val.date_depart,
       heure_depart: val.heure_depart,
-      prix: Number(val.prix),
-      places_disponibles: this.busDisponibles.find(b => b.id === val.bus)?.capacite ?? 45
+      prix: Number(val.prix)
     };
 
     // ✅ URL différente selon le mode (admin ou gestionnaire)

@@ -1,4 +1,5 @@
 from rest_framework import viewsets, permissions, status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters import rest_framework as filters
@@ -49,12 +50,13 @@ class TrajetViewSet(viewsets.ModelViewSet):
         - Client/Public : voit uniquement les trajets futurs
         """
         user = self.request.user
+        role = getattr(user, 'role', None)
         base_qs = Trajet.objects.all().select_related('bus', 'bus__agence')
 
         # ✅ MODE ADMIN CONSULTANT UN GESTIONNAIRE SPÉCIFIQUE
         manager_id = self.kwargs.get('manager_id') or self.request.query_params.get('manager_id')
         
-        if manager_id and user.role == 'ADMIN':
+        if manager_id and role == 'ADMIN':
             # Récupérer le gestionnaire ciblé et filtrer par SON agence
             gestionnaire = get_object_or_404(User, id=manager_id, role='GESTIONNAIRE')
             if gestionnaire.agence:
@@ -62,11 +64,11 @@ class TrajetViewSet(viewsets.ModelViewSet):
             return Trajet.objects.none()  # Gestionnaire sans agence = aucun trajet
 
         # ✅ ADMIN STANDARD : voit tout
-        if user.role == 'ADMIN':
+        if role == 'ADMIN':
             return base_qs.order_by('-date_depart', 'heure_depart')
         
         # ✅ GESTIONNAIRE : voit uniquement les trajets de SA propre agence
-        if user.role == 'GESTIONNAIRE' and hasattr(user, 'agence') and user.agence:
+        if role == 'GESTIONNAIRE' and hasattr(user, 'agence') and user.agence:
             return base_qs.filter(bus__agence=user.agence).order_by('-date_depart', 'heure_depart')
         
         # ✅ CLIENT/PUBLIC : uniquement les trajets futurs
@@ -97,13 +99,10 @@ class TrajetViewSet(viewsets.ModelViewSet):
         
         # ✅ Vérification : le bus doit appartenir à l'agence cible
         if agence_cible and bus_propose and bus_propose.agence != agence_cible:
-            raise permissions.PermissionDenied("Ce bus n'appartient pas à l'agence ciblée.")
+            raise PermissionDenied("Ce bus n'appartient pas à l'agence ciblée.")
         
-        # ✅ Sauvegarde avec liaison explicite à l'agence
-        if agence_cible:
-            serializer.save(agence=agence_cible)
-        else:
-            serializer.save()
+        # L'agence du trajet est deduite du bus affecte.
+        serializer.save()
 
     @action(detail=False, methods=['get'])
     def statistiques_remplissage(self, request):

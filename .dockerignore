@@ -1,0 +1,14 @@
+# Fichiers à ignorer pour Docker
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.venv
+**/venv
+**/.git
+**/.gitignore
+**/.env
+**/node_modules
+**/dist
+**/.angular
+**/db.sqlite3

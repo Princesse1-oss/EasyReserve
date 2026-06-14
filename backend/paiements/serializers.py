@@ -30,7 +30,7 @@ class PaiementSerializer(serializers.ModelSerializer):
         trajet = obj.reservation.trajet if obj.reservation else None
         if not trajet:
             return 'Trajet inconnu'
-        return f"{trajet.ville_depart} → {trajet.ville_arrivee} ({trajet.date_depart})"
+        return f"{trajet.ville_depart} -> {trajet.ville_arrivee} ({trajet.date_depart})"
 
     def validate_reservation(self, value):
         """Vérifie que la réservation existe, appartient au client, et n'est pas déjà payée."""
@@ -45,7 +45,7 @@ class PaiementSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Vous ne pouvez pas payer pour une réservation qui ne vous appartient pas.")
 
         # Vérifier que la réservation n'a pas déjà un paiement valide
-        if value.paiement_set.filter(statut='valide').exists():
+        if value.paiements.filter(statut='valide').exists():
             raise serializers.ValidationError("Cette réservation a déjà été payée.")
 
         # Vérifier que la réservation est encore valide (pas annulée)
@@ -60,12 +60,6 @@ class PaiementSerializer(serializers.ModelSerializer):
         # ✅ BLOCAGE : trajet déjà parti
         if getattr(value.trajet, 'statut_depart', None) == 'parti':
             raise serializers.ValidationError("Paiement impossible : ce trajet est déjà parti.")
-
-        # ✅ BLOCAGE : plus assez de places
-        if value.trajet.places_disponibles < value.nombre_places:
-            raise serializers.ValidationError(
-                f"Paiement impossible : seulement {value.trajet.places_disponibles} place(s) disponible(s)."
-            )
 
         return value
 
@@ -91,7 +85,8 @@ class PaiementSerializer(serializers.ModelSerializer):
         
         if reservation and montant:
             prix_total_attendu = reservation.trajet.prix * reservation.nombre_places
-            if montant != prix_total_attendu:
+            # Convert both to float for comparison to avoid Decimal vs int issues
+            if float(montant) != float(prix_total_attendu):
                 raise serializers.ValidationError({
                     'montant': f"Le montant doit être de {prix_total_attendu} FCFA ({reservation.trajet.prix} × {reservation.nombre_places} places)."
                 })

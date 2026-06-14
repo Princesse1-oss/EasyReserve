@@ -4,7 +4,7 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 
 from .models import Chauffeur
 from .serializers import ChauffeurSerializer
-from users.permissions import IsAdminUserCustom, IsGestionnaire
+from users.permissions import IsAdminUserCustom, IsGestionnaire, IsAdminOrGestionnaire
 
 
 class ChauffeurViewSet(viewsets.ModelViewSet):
@@ -23,7 +23,7 @@ class ChauffeurViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAdminUserCustom() | IsGestionnaire()]
+            return [IsAdminOrGestionnaire()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):

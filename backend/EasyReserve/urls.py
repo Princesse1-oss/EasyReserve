@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
+from users.serializers import CustomTokenObtainPairSerializer
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -12,11 +13,11 @@ urlpatterns = [
     path('api/docs/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 
     # ✅ AUTHENTIFICATION JWT (Routes alignées avec le frontend)
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/', TokenObtainPairView.as_view(serializer_class=CustomTokenObtainPairSerializer), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     
     # ✅ AJOUT CRUCIAL : Alias pour correspondre aux appels du frontend
-    path('api/auth/jwt/create/', TokenObtainPairView.as_view(), name='auth_jwt_create'),
+    path('api/auth/jwt/create/', TokenObtainPairView.as_view(serializer_class=CustomTokenObtainPairSerializer), name='auth_jwt_create'),
     path('api/auth/jwt/refresh/', TokenRefreshView.as_view(), name='auth_jwt_refresh'),
     
     # Modules métiers

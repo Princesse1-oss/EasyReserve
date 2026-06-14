@@ -1,11 +1,10 @@
-import { Component, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { RouterLink } from '@angular/router';
+import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
+import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { environment } from '../../../../environments/environment';
 import { AuthService } from '../../../services/auth.service';
-import { Navbar } from "../../../components/navbar/navbar";
 
 // ✅ Interfaces avec typage strict
 interface Bus {
@@ -35,12 +34,18 @@ interface BusCreateRequest {
 @Component({
   selector: 'app-buses',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink, Navbar],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink],
   templateUrl: './bus.html',
   styleUrl: './bus.scss'
 })
 export class GestionnaireBuses implements OnInit {
   private readonly apiUrl = environment.apiUrl;
+  
+  // ✅ MODE ADMIN
+  isAdminMode = false;
+  managerId: string | null = null;
+  gestionnaireNom = '';
+  agenceNom = '';
   
   busForm!: FormGroup;
   modifForm!: FormGroup;
@@ -59,12 +64,34 @@ export class GestionnaireBuses implements OnInit {
   constructor(
     private fb: FormBuilder,
     private http: HttpClient,
-    private authService: AuthService
+    private authService: AuthService,
+    private router: Router,
+    private cdr: ChangeDetectorRef,
+    private route: ActivatedRoute
   ) {}
 
   get user() { return this.authService.getCurrentUser(); }
   get isAdmin() { return this.user?.role === 'ADMIN'; }
   get isGestionnaire() { return this.user?.role === 'GESTIONNAIRE'; }
+
+  onLogout(): void {
+    this.authService.logout();
+    this.router.navigate(['/login']);
+  }
+
+  goBack(): void {
+    this.router.navigate([this.isAdminMode ? `/dashboard/gestionnaires/${this.managerId}/activites` : '/gestionnaire'], {
+      queryParams: this.isAdminMode ? { nom: this.gestionnaireNom, agence: this.agenceNom } : {}
+    });
+  }
+
+  private getAuthHeaders(): HttpHeaders {
+    const token = localStorage.getItem('token');
+    return new HttpHeaders({
+      Authorization: token ? `Bearer ${token}` : '',
+      'Content-Type': 'application/json'
+    });
+  }
   
   // ✅ Gestion sécurisée de userAgenceId
   get userAgenceId(): number | null { 
@@ -73,11 +100,25 @@ export class GestionnaireBuses implements OnInit {
   }
 
   ngOnInit(): void {
+    // ✅ DETECTION MODE ADMIN
+    this.managerId = this.route.snapshot.paramMap.get('managerId');
+    this.isAdminMode = !!this.managerId;
+    if (this.isAdminMode) {
+      this.gestionnaireNom = this.route.snapshot.queryParamMap.get('nom') || 'Gestionnaire';
+      this.agenceNom = this.route.snapshot.queryParamMap.get('agence') || 'Agence inconnue';
+    }
+    
     this.initForms();
     this.loadBuses();
     if (this.isAdmin) {
       this.loadAgences();
     }
+    setTimeout(() => {
+      if (this.loading) {
+        this.loading = false;
+        this.errorMsg = 'Chargement interrompu. Verifiez que le serveur Django est demarre et que votre session est valide.';
+      }
+    }, 9000);
   }
 
   private initForms(): void {
@@ -109,7 +150,12 @@ export class GestionnaireBuses implements OnInit {
     this.loading = true;
     this.errorMsg = '';
 
-    this.http.get<Bus[] | { results: Bus[] }>(`${this.apiUrl}/bus/`).subscribe({
+    // ✅ Construire l'URL avec managerId si mode admin
+    const busesUrl = this.isAdminMode 
+      ? `${this.apiUrl}/bus/?manager_id=${this.managerId}` 
+      : `${this.apiUrl}/bus/`;
+
+    this.http.get<Bus[] | { results: Bus[] }>(busesUrl, { headers: this.getAuthHeaders() }).subscribe({
       next: (response) => {
         const dataArray = Array.isArray(response) 
           ? response 
@@ -117,20 +163,23 @@ export class GestionnaireBuses implements OnInit {
         
         this.buses = dataArray;
         this.loading = false;
+        this.cdr.detectChanges();
         console.log('✅ Buses chargés :', this.buses.length);
       },
       error: (err) => {
         this.loading = false;
         this.errorMsg = 'Impossible de charger la liste des bus.';
+        this.cdr.detectChanges();
         console.error('❌ Erreur chargement buses:', err);
       }
     });
   }
 
   loadAgences(): void {
-    this.http.get<Agence[] | { results: Agence[] }>(`${this.apiUrl}/agences/`).subscribe({
+    this.http.get<Agence[] | { results: Agence[] }>(`${this.apiUrl}/agences/`, { headers: this.getAuthHeaders() }).subscribe({
       next: (data) => {
         this.agences = Array.isArray(data) ? data : (data as { results?: Agence[] })?.results || [];
+        this.cdr.detectChanges();
       },
       error: (err) => console.error('❌ Erreur chargement agences:', err)
     });
@@ -217,7 +266,7 @@ export class GestionnaireBuses implements OnInit {
 
     console.log('📤 Payload création bus:', JSON.stringify(payload));
 
-    this.http.post<Bus>(`${this.apiUrl}/bus/`, payload).subscribe({
+    this.http.post<Bus>(`${this.apiUrl}/bus/`, payload, { headers: this.getAuthHeaders() }).subscribe({
       next: (response) => {
         this.loading = false;
         this.successMsg = `✅ Bus "${response.matricule}" créé avec succès !`;
@@ -282,7 +331,7 @@ export class GestionnaireBuses implements OnInit {
       payload.agence = agenceValue;
     }
 
-    this.http.patch<Bus>(`${this.apiUrl}/bus/${this.busAModifier.id}/`, payload).subscribe({
+    this.http.patch<Bus>(`${this.apiUrl}/bus/${this.busAModifier.id}/`, payload, { headers: this.getAuthHeaders() }).subscribe({
       next: (response) => {
         this.loading = false;
         this.successMsg = `✅ Bus "${response.matricule}" mis à jour !`;
@@ -306,7 +355,7 @@ export class GestionnaireBuses implements OnInit {
   supprimerBus(bus: Bus): void {
     if (!confirm(`⚠️ Supprimer le bus "${bus.matricule}" ? Cette action est irréversible.`)) return;
     
-    this.http.delete(`${this.apiUrl}/bus/${bus.id}/`).subscribe({
+    this.http.delete(`${this.apiUrl}/bus/${bus.id}/`, { headers: this.getAuthHeaders() }).subscribe({
       next: () => {
         this.successMsg = `🗑 Bus "${bus.matricule}" supprimé.`;
         this.loadBuses();
@@ -343,6 +392,27 @@ export class GestionnaireBuses implements OnInit {
   }
 
   // ✅ GETTERS POUR VALIDATION TEMPLATE
+  get activeBusCount(): number {
+    return this.buses.filter((bus) => bus.is_active !== false).length;
+  }
+
+  get totalCapacity(): number {
+    return this.buses.reduce((total, bus) => total + Number(bus.capacite || 0), 0);
+  }
+
+  get busTypeCount(): number {
+    return new Set(this.buses.map((bus) => bus.type_bus)).size;
+  }
+
+  cleanTypeLabel(type: string): string {
+    const map: Record<string, string> = {
+      standard: 'Standard',
+      vip: 'VIP',
+      minibus: 'Minibus'
+    };
+    return map[type] || type;
+  }
+
   get f() { return this.busForm.controls; }
   get m() { return this.modifForm.controls; }
 }

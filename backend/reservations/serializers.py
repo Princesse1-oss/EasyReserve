@@ -9,7 +9,7 @@ class ReservationSerializer(serializers.ModelSerializer):
 
     # ✅ Champs explicites pour la création
     trajet = serializers.PrimaryKeyRelatedField(queryset=Trajet.objects.all())
-    nombre_places = serializers.IntegerField(min_value=1, max_value=10)
+    nombre_places = serializers.IntegerField(min_value=1, max_value=999)
     passager_nom = serializers.CharField(required=False, allow_blank=True)
     passager_tel = serializers.CharField(required=False, allow_blank=True)
     statut = serializers.CharField(default='en_attente')
@@ -46,11 +46,15 @@ class ReservationSerializer(serializers.ModelSerializer):
     def validate(self, data):
         trajet = data.get('trajet')
         nb = data.get('nombre_places', 1)
-        if trajet and trajet.places_disponibles < nb:
-            raise serializers.ValidationError({'nombre_places': f"Seulement {trajet.places_disponibles} place(s) dispo."})
+        if trajet:
+            from django.utils import timezone
+            if trajet.date_depart < timezone.now().date():
+                raise serializers.ValidationError({'trajet': "Ce voyage est déjà passé."})
+            if getattr(trajet, 'statut_depart', None) == 'parti':
+                raise serializers.ValidationError({'trajet': "Ce trajet est déjà parti."})
+            if trajet.places_disponibles < nb:
+                raise serializers.ValidationError({'nombre_places': f"Seulement {trajet.places_disponibles} place(s) dispo."})
         return data
 
     def create(self, validated_data):
-        # ✅ Log de debug pour voir exactement ce qui arrive
-        print(f"[DEBUG] Payload reçu: {validated_data}")
         return Reservation.objects.create(**validated_data)

@@ -13,6 +13,19 @@
     </div>
   </div>
 
+  <!-- BOUTONS D'ACTION RAPIDE -->
+  <div *ngIf="!loading && !erreur" class="action-buttons">
+    <button class="action-btn" (click)="goToTrajets()">
+      🚌 Voir les trajets
+    </button>
+    <button class="action-btn" (click)="goToReservations()">
+      📋 Voir les réservations
+    </button>
+    <button class="action-btn" (click)="goToBuses()">
+      🚐 Voir les bus
+    </button>
+  </div>
+
   <!-- ERREUR -->
   <div *ngIf="erreur" class="alert-erreur">
     <span>⚠️ {{ erreur }}</span>

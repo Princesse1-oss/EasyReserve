@@ -11,16 +11,16 @@ import { RouterLink } from '@angular/router';
 })
 export class Accueil {
   fonctionnalites = [
-    { icon: '🔍', titre: 'Rechercher', description: 'Trouvez le trajet idéal selon votre ville de départ et destination.' },
-    { icon: '🎫', titre: 'Réserver', description: 'Choisissez votre siège et confirmez votre billet en ligne.' },
-    { icon: '💳', titre: 'Payer', description: 'Payez via Mobile Money ou carte bancaire en toute sécurité.' },
-    { icon: '📧', titre: 'Recevoir', description: 'Recevez votre billet électronique instantanément par email.' },
+    { icon: 'bi-search', titre: 'Rechercher', description: 'Filtrez les trajets par ville de depart, destination et date de voyage.' },
+    { icon: 'bi-ticket-perforated', titre: 'Reserver', description: 'Consultez les horaires, les prix et les places disponibles avant de confirmer.' },
+    { icon: 'bi-credit-card', titre: 'Payer', description: 'Reglez votre billet en ligne par Mobile Money ou carte bancaire.' },
+    { icon: 'bi-qr-code', titre: 'Recevoir', description: 'Accedez a votre billet electronique et a l historique de vos reservations.' },
   ];
 
   stats = [
-    { nombre: '500+', label: 'Trajets disponibles' },
-    { nombre: '50+', label: 'Bus en service' },
-    { nombre: '10K+', label: 'Clients satisfaits' },
-    { nombre: '20+', label: 'Villes desservies' },
+    { nombre: '24h/24', label: 'Reservation en ligne' },
+    { nombre: '3', label: 'Etapes pour reserver' },
+    { nombre: '100%', label: 'Billets numeriques' },
+    { nombre: 'Admin', label: 'Gestion centralisee' },
   ];
 }

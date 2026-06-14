@@ -18,6 +18,10 @@ export const authInterceptor: HttpInterceptorFn = (req, next: HttpHandlerFn): Ob
   
   // ✅ N'injecte le token que sur les URLs API locales
   const isApiUrl = req.url.startsWith('http') && !req.url.includes('github') && !req.url.includes('fonts.googleapis');
+  const isAuthEndpoint = req.url.includes('/auth/jwt/create/')
+    || req.url.includes('/auth/jwt/refresh/')
+    || req.url.includes('/token/')
+    || req.url.includes('/token/refresh/');
   
   if (token && isApiUrl) {
     req = req.clone({
@@ -27,7 +31,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next: HttpHandlerFn): Ob
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
-      if (error.status === 401 && isApiUrl) {
+      if (error.status === 401 && isApiUrl && !isAuthEndpoint) {
         return handle401Error(req, next, authService);
       }
       return throwError(() => error);

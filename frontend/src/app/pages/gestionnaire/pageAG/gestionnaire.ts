@@ -1,398 +1,360 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, AbstractControl, ValidationErrors } from '@angular/forms';
-import { HttpClient, HttpHeaders, HttpErrorResponse } from '@angular/common/http';
-import { forkJoin, of } from 'rxjs';
-import { catchError, finalize } from 'rxjs/operators';
+import { Router, RouterModule } from '@angular/router';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { forkJoin, Observable, of } from 'rxjs';
+import { catchError, finalize, switchMap } from 'rxjs/operators';
 import { environment } from '../../../../environments/environment';
 import { AuthService, User } from '../../../services/auth.service';
-import { FormsModule } from '@angular/forms';
-
-// ✅ VALIDATEUR : Bloque les dates passées
-function dateFutureValidator(control: AbstractControl): ValidationErrors | null {
-  if (!control.value) return null;
-  const selectedDate = new Date(control.value);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (selectedDate < today) return { datePassee: true };
-  return null;
-}
 
 @Component({
   selector: 'app-gestionnaire',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, FormsModule],
+  imports: [CommonModule, RouterModule],
   templateUrl: './gestionnaire.html',
   styleUrl: './gestionnaire.scss'
 })
 export class GestionnaireComponent implements OnInit {
   private readonly apiUrl = environment.apiUrl;
-  
-  user: User | null = null; 
-  currentSection: 'dashboard' | 'trajets' | 'reservations' | 'buses' = 'trajets';
-  
+
+  user: User | null = null;
   loading = true;
   successMsg = '';
   errorMsg = '';
 
-  agence: any = null;
+  agence: any = { nom: 'Administration REBUS', id: null };
+  agences: any[] = [];
+  gestionnairesStats = { total: 0, actifs: 0, inactifs: 0 };
   buses: any[] = [];
   trajets: any[] = [];
-  filteredTrajets: any[] = [];
   reservations: any[] = [];
+  recentActivities: any[] = [];
 
-  // ✅ KPIs
-  chiffreAffaires = 0;
+  totalAgencesCount = 0;
+  totalGestionnairesCount = 0;
   totalReservationsCount = 0;
+  totalAnnulationsCount = 0;
+  totalBusCount = 0;
+  activeBusesCount = 0;
+  pendingReservationsCount = 0;
+  confirmedReservationsCount = 0;
+  activeBusCount = 0;
+  chiffreAffaires = 0;
   busesEnRoute = 0;
   tauxOccupation = 0;
   departsAujourdhui = 0;
   revenuPrevisionnel = 0;
   alerteTarif = 'Aucune';
 
-  busForm!: FormGroup;
-  trajetForm!: FormGroup;
-  isEditingTrajet = false;
-  editingTrajetId: number | null = null;
-  searchQuery = '';
-  filterDate = '';
-
   constructor(
-    private fb: FormBuilder, 
-    private http: HttpClient, 
-    private readonly authService: AuthService
+    private http: HttpClient,
+    private readonly authService: AuthService,
+    private router: Router
   ) {}
 
   ngOnInit(): void {
     this.user = this.authService.getCurrentUser();
-    this.initForms();
     this.loadData();
+    setTimeout(() => {
+      if (this.loading) {
+        this.loading = false;
+        this.errorMsg = 'Chargement interrompu. Verifiez que le serveur Django est demarre et que votre session est valide.';
+        this.calculateMetrics();
+      }
+    }, 9000);
   }
 
   private getAuthHeaders(): HttpHeaders {
     const token = localStorage.getItem('token');
     return new HttpHeaders({
-      'Authorization': token ? `Bearer ${token}` : '',
+      Authorization: token ? `Bearer ${token}` : '',
       'Content-Type': 'application/json'
     });
   }
 
-  onLogout(): void { this.authService.logout(); }
-
-  initForms(): void {
-    this.busForm = this.fb.group({
-      matricule: ['', [Validators.required, Validators.minLength(4)]],
-      capacite: [45, [Validators.required, Validators.min(1), Validators.max(80)]],
-      type_bus: ['standard', Validators.required]
-    });
-    this.trajetForm = this.fb.group({
-      ville_depart: ['', Validators.required],
-      ville_arrivee: ['', Validators.required],
-      date_depart: ['', [Validators.required, dateFutureValidator]],
-      heure_depart: ['', Validators.required],
-      prix: ['', [Validators.required, Validators.min(1)]],
-      bus: ['', Validators.required]
-    });
+  onLogout(): void {
+    this.authService.logout();
+    this.router.navigate(['/login']);
   }
 
-  navigateToSection(section: 'dashboard' | 'trajets' | 'reservations' | 'buses'): void {
-    this.currentSection = section;
+  navigateToSection(section: 'dashboard' | 'trajets' | 'reservations' | 'buses' | 'paiement' | 'chauffeurs'): void {
     this.successMsg = '';
     this.errorMsg = '';
-    if (section === 'trajets') this.applyTrajetFilters();
-  }
-
-  getMinDate(): string {
-    return new Date().toISOString().split('T')[0];
+    const routes: Record<typeof section, string> = {
+      dashboard: '/gestionnaire',
+      trajets: '/gestionnaire/trajets',
+      reservations: '/gestionnaire/reservations',
+      buses: '/gestionnaire/buses',
+      paiement: '/gestionnaire/paiement',
+      chauffeurs: '/gestionnaire/chauffeurs'
+    };
+    this.router.navigate([routes[section]]);
   }
 
   loadData(): void {
     this.loading = true;
     this.errorMsg = '';
-    this.http.get<any>(`${this.apiUrl}/agences/ma_gérance/`, { headers: this.getAuthHeaders() }).pipe(
-      catchError(() => of({ nom: 'Mon Agence', id: null }))
-    ).subscribe({
-      next: (data) => { this.agence = data; this.loadAllData(); },
-      error: () => { this.agence = { nom: 'Mon Agence', id: null }; this.loadAllData(); }
-    });
-  }
-
-  loadAllData(): void {
     const headers = this.getAuthHeaders();
+
     forkJoin({
-      trajets: this.http.get<any>(`${this.apiUrl}/trajets/`, { headers }).pipe(catchError(() => of({ results: [] }))),
-      reservations: this.http.get<any>(`${this.apiUrl}/reservations/`, { headers }).pipe(catchError(() => of({ results: [] }))),
-      buses: this.http.get<any>(`${this.apiUrl}/bus/`, { headers }).pipe(catchError(() => of({ results: [] })))
+      agences: this.http.get<any>(`${this.apiUrl}/agences/`, { headers }).pipe(catchError(() => of({ results: [] }))),
+      gestionnaires: this.http.get<any>(`${this.apiUrl}/users/gestionnaires/count/`, { headers }).pipe(catchError(() => of({ total: 0, actifs: 0, inactifs: 0 }))),
+      trajets: this.getListWithFallback('/trajets/?page_size=1000'),
+      reservations: this.http.get<any>(`${this.apiUrl}/reservations/?page_size=1000`, { headers }).pipe(catchError(() => of({ results: [], count: 0 }))),
+      reservationStats: this.http.get<any>(`${this.apiUrl}/reservations/statistiques/`, { headers }).pipe(catchError(() => of(null))),
+      buses: this.http.get<any>(`${this.apiUrl}/bus/?page_size=1000`, { headers }).pipe(catchError(() => of({ results: [], count: 0 })))
     }).pipe(
-      finalize(() => { this.loading = false; this.applyTrajetFilters(); this.calculateMetrics(); })
+      finalize(() => {
+        this.loading = false;
+      })
     ).subscribe({
       next: (res) => {
+        this.agences = this.extractData(res.agences);
+        this.gestionnairesStats = {
+          total: Number(res.gestionnaires?.total || 0),
+          actifs: Number(res.gestionnaires?.actifs || 0),
+          inactifs: Number(res.gestionnaires?.inactifs || 0)
+        };
         this.trajets = this.extractData(res.trajets);
         this.reservations = this.extractData(res.reservations);
         this.buses = this.extractData(res.buses);
-        
-        // ✅ DEBUG COMPLET : Voir exactement ce que l'API renvoie
-        console.group('📦 DONNÉES REÇUES');
-        console.log('🚌 Total trajets:', this.trajets.length);
-        if (this.trajets.length > 0) {
-          console.log('🔍 Premier trajet:', {
-            id: this.trajets[0].id,
-            ville: `${this.trajets[0].ville_depart} → ${this.trajets[0].ville_arrivee}`,
-            prix: this.trajets[0].prix,
-            bus_id: this.trajets[0].bus,
-            bus_details: this.trajets[0].bus_details,
-            places_disponibles: this.trajets[0].places_disponibles,
-            agence_nom: this.trajets[0].agence_nom
-          });
-        }
-        console.groupEnd();
-        
+        this.totalReservationsCount = this.extractCount(res.reservations, this.reservations.length);
+        this.totalBusCount = this.extractCount(res.buses, this.buses.length);
+        this.agence = this.agences[0] || { nom: 'Administration REBUS', id: null };
         this.calculateMetrics();
+        this.applyReservationStats(res.reservationStats);
+        this.recentActivities = this.getRecentActivities();
       },
-      error: (err) => { 
-        console.error('❌ Erreur chargement:', err); 
-        this.errorMsg = 'Erreur de chargement des données'; 
+      error: () => {
+        this.errorMsg = 'Certaines donnees n ont pas pu etre chargees.';
+        this.calculateMetrics();
+        this.recentActivities = this.getRecentActivities();
       }
     });
+  }
+
+  private getListWithFallback(path: string): Observable<any> {
+    const headers = this.getAuthHeaders();
+    const emptyResponse = { results: [], count: 0 };
+
+    return this.http.get<any>(`${this.apiUrl}${path}`, { headers }).pipe(
+      catchError(() => of(emptyResponse)),
+      switchMap((response) => {
+        const data = this.extractData(response);
+        const count = this.extractCount(response, data.length);
+        if (data.length > 0 || count > 0) return of(response);
+
+        return this.http.get<any>(`${this.apiUrl}${path}`).pipe(
+          catchError(() => of(response))
+        );
+      })
+    );
+  }
+
+  private applyReservationStats(stats: any): void {
+    if (!stats) return;
+
+    const total = Number(stats.total_reservations ?? 0);
+    const confirmed = Number(stats.total_confirmations ?? stats.confirmees ?? 0);
+    const pending = Number(stats.en_attente ?? 0);
+    const cancelled = Number(stats.annulees ?? 0);
+    const revenue = Number(stats.revenus_generes ?? 0);
+
+    this.totalReservationsCount = Math.max(this.totalReservationsCount, total, confirmed + pending + cancelled);
+    this.confirmedReservationsCount = Math.max(this.confirmedReservationsCount, confirmed);
+    this.pendingReservationsCount = Math.max(this.pendingReservationsCount, pending);
+    this.totalAnnulationsCount = Math.max(this.totalAnnulationsCount, cancelled);
+    this.chiffreAffaires = Math.max(this.chiffreAffaires, revenue);
   }
 
   private extractData(response: any): any[] {
     if (!response) return [];
     if (Array.isArray(response)) return response;
-    if (response.results && Array.isArray(response.results)) return response.results;
+    if (Array.isArray(response.results)) return response.results;
+    if (Array.isArray(response.data)) return response.data;
     return [];
   }
 
-  // ✅ CALCUL DES MÉTRIQUES - Version ultra-robuste
+  private extractCount(response: any, fallback = 0): number {
+    if (!response) return fallback;
+    if (typeof response.count === 'number') return response.count;
+    if (typeof response.total === 'number') return response.total;
+    return fallback;
+  }
+
   private calculateMetrics(): void {
     const todayStr = new Date().toISOString().split('T')[0];
-    
-    // 1️⃣ Départs aujourd'hui
+
+    this.totalAgencesCount = this.agences.length;
+    this.totalGestionnairesCount = this.gestionnairesStats.total;
+    this.totalReservationsCount = Math.max(this.totalReservationsCount, this.reservations.length);
+    this.pendingReservationsCount = this.reservations.filter((reservation: any) => {
+      const statut = this.normalizeStatus(reservation.statut || reservation.status);
+      return statut === 'en_attente' || statut === 'en attente' || statut === 'pending';
+    }).length;
+    this.confirmedReservationsCount = this.reservations.filter((reservation: any) => {
+      const statut = this.normalizeStatus(reservation.statut || reservation.status);
+      return statut === 'confirmee' || statut === 'confirme' || statut === 'confirmed';
+    }).length;
+    this.totalAnnulationsCount = this.reservations.filter((r: any) => {
+      const statut = this.normalizeStatus(r.statut || r.status);
+      return statut === 'annulee' || statut === 'annule' || statut === 'cancelled';
+    }).length;
+    this.totalBusCount = Math.max(this.totalBusCount, this.buses.length);
+    this.activeBusesCount = this.buses.filter((bus: any) => bus.is_active !== false).length || this.totalBusCount;
+    this.activeBusCount = this.activeBusesCount;
+
     this.departsAujourdhui = this.trajets.filter((t: any) => t.date_depart === todayStr).length;
-    
-    // 2️⃣ Bus en route + calcul sécurisé capacité/dispo
     this.busesEnRoute = this.trajets.filter((t: any) => {
       const cap = this.getCapacite(t);
       const dispo = this.getPlacesDisponibles(t, cap);
       return dispo < cap;
     }).length;
-    
-    // 3️⃣ Revenu prévisionnel
+
     this.revenuPrevisionnel = this.trajets.reduce((acc, t: any) => {
       const prix = Number(t.prix) || 0;
       const cap = this.getCapacite(t);
       const dispo = this.getPlacesDisponibles(t, cap);
       const vendues = Math.max(0, cap - dispo);
-      return acc + (prix * vendues);
+      return acc + prix * vendues;
     }, 0);
-    
-    // 4️⃣ Chiffre d'affaires (réservations confirmées)
-    this.totalReservationsCount = this.reservations.length;
+
     this.chiffreAffaires = this.reservations
-      .filter((r: any) => r.statut === 'confirmee')
+      .filter((r: any) => {
+        const statut = this.normalizeStatus(r.statut || r.status);
+        return statut === 'confirmee' || statut === 'confirme' || statut === 'confirmed';
+      })
       .reduce((acc, r: any) => {
         const prix = Number(r.trajet_detail?.prix || r.trajet?.prix || 0);
         const places = Number(r.nombre_places) || 1;
-        return acc + (prix * places);
+        return acc + prix * places;
       }, 0);
-    
-    // 5️⃣ Taux d'occupation
-    if (this.trajets.length > 0) {
-      const totalPlaces = this.trajets.reduce((sum, t: any) => sum + this.getCapacite(t), 0);
-      const placesOccupees = this.trajets.reduce((sum, t: any) => {
-        const cap = this.getCapacite(t);
-        const dispo = this.getPlacesDisponibles(t, cap);
-        return sum + Math.max(0, cap - dispo);
-      }, 0);
-      this.tauxOccupation = totalPlaces > 0 ? Math.round((placesOccupees / totalPlaces) * 100) : 0;
-    } else {
-      this.tauxOccupation = 0;
-    }
-    
-    // 6️⃣ Alerte tarifs
+
+    const totalPlaces = this.trajets.reduce((sum, t: any) => sum + this.getCapacite(t), 0);
+    const placesOccupees = this.trajets.reduce((sum, t: any) => {
+      const cap = this.getCapacite(t);
+      const dispo = this.getPlacesDisponibles(t, cap);
+      return sum + Math.max(0, cap - dispo);
+    }, 0);
+    this.tauxOccupation = totalPlaces > 0 ? Math.round((placesOccupees / totalPlaces) * 100) : 0;
+
     const basPrix = this.trajets.filter((t: any) => (Number(t.prix) || 0) < 3000);
     this.alerteTarif = basPrix.length > 0 ? `${basPrix.length} trajet(s) < 3000 FCFA` : 'Aucune';
-    
-    // ✅ Log final pour vérification
-    console.log('📊 KPIs finaux:', {
-      trajets: this.trajets.length,
-      departsAujourdhui: this.departsAujourdhui,
-      busesEnRoute: this.busesEnRoute,
-      revenuPrevisionnel: this.revenuPrevisionnel,
-      tauxOccupation: this.tauxOccupation,
-      chiffreAffaires: this.chiffreAffaires
-    });
   }
 
-  // ✅ Helper : Extraire la capacité du bus (fallback sécurisé)
   private getCapacite(trajet: any): number {
-    return trajet.bus_details?.capacite 
-        ?? trajet.bus?.capacite 
-        ?? 45; // Valeur par défaut si tout échoue
+    return trajet.bus_details?.capacite ?? trajet.bus?.capacite ?? 45;
   }
 
-  // ✅ Helper : Extraire places disponibles (fallback sur capacité si null)
   private getPlacesDisponibles(trajet: any, capacite: number): number {
-    const dispo = trajet.places_disponibles;
-    // Si null, undefined ou négatif → on suppose que tout est disponible
-    if (dispo === null || dispo === undefined || dispo < 0) return capacite;
+    const dispo = Number(trajet.places_disponibles);
+    if (!Number.isFinite(dispo) || dispo < 0) return capacite;
     return dispo;
   }
 
-  // ✅ VALIDATION RÉSERVATION
-  validerBilletAchat(id: number): void {
-    if (!confirm('Confirmer cette réservation ?')) return;
-    this.http.post(`${this.apiUrl}/reservations/${id}/confirmer/`, {}, { headers: this.getAuthHeaders() }).subscribe({
-      next: () => { this.successMsg = '✅ Réservation confirmée !'; this.loadAllData(); },
-      error: () => this.errorMsg = '❌ Erreur validation.'
-    });
+  private normalizeStatus(value: any): string {
+    return String(value || '').trim().toLowerCase().replace(/-/g, '_');
   }
 
-  // ✅ AJOUT BUS
-  addBusSubmit(): void {
-    if (this.busForm.invalid) { this.busForm.markAllAsTouched(); return; }
-    this.http.post(`${this.apiUrl}/bus/`, this.busForm.value, { headers: this.getAuthHeaders() }).subscribe({
-      next: () => { 
-        this.successMsg = '✅ Bus ajouté !'; 
-        this.busForm.reset({ capacite: 45, type_bus: 'standard' }); 
-        this.loadAllData(); 
-      },
-      error: () => this.errorMsg = '❌ Erreur ajout bus.'
-    });
+  getRecentActivities(): any[] {
+    const reservationActivities = this.reservations.map((reservation: any) => ({
+      type: 'reservation',
+      title: `Reservation #${reservation.id || '-'}`,
+      description: `${this.getClientLabel(reservation)} - ${this.getTrajetLabel(reservation)}`,
+      status: reservation.statut || reservation.status || 'en_attente',
+      date: reservation.date_reservation || reservation.created_at || reservation.date_creation,
+      action: 'reservations'
+    }));
+
+    const trajetActivities = this.trajets.map((trajet: any) => ({
+      type: 'trajet',
+      title: 'Trajet planifie',
+      description: `${trajet.ville_depart || '-'} - ${trajet.ville_arrivee || '-'} a ${trajet.heure_depart || '-'}`,
+      status: trajet.statut_depart || trajet.statut || 'planifie',
+      date: trajet.date_creation || trajet.created_at || trajet.date_depart,
+      action: 'trajets'
+    }));
+
+    const busActivities = this.buses.map((bus: any) => ({
+      type: 'bus',
+      title: 'Bus enregistre',
+      description: `${bus.matricule || 'Bus'} - ${bus.capacite || 0} places`,
+      status: bus.is_active === false ? 'inactif' : 'actif',
+      date: bus.date_creation || bus.created_at || bus.updated_at,
+      action: 'buses'
+    }));
+
+    return [...reservationActivities, ...trajetActivities, ...busActivities]
+      .sort((a, b) => this.getDateTime(b.date) - this.getDateTime(a.date))
+      .slice(0, 10);
   }
 
-  // ✅ FILTRES TRAJETS
-  applyTrajetFilters(): void {
-    let filtered = [...this.trajets];
-    if (this.searchQuery.trim()) {
-      const q = this.searchQuery.toLowerCase();
-      filtered = filtered.filter(t => 
-        t.ville_depart?.toLowerCase().includes(q) ||
-        t.ville_arrivee?.toLowerCase().includes(q) ||
-        t.id?.toString().includes(q)
-      );
-    }
-    if (this.filterDate) {
-      filtered = filtered.filter(t => t.date_depart === this.filterDate);
-    }
-    this.filteredTrajets = filtered.sort((a, b) => 
-      new Date(b.date_depart).getTime() - new Date(a.date_depart).getTime()
-    );
-  }
-
-  resetTrajetFilters(): void {
-    this.searchQuery = '';
-    this.filterDate = '';
-    this.applyTrajetFilters();
-  }
-
-  // ✅ CRÉATION TRAJET
-  addTrajetSubmit(): void {
-    if (this.trajetForm.invalid) {
-      this.trajetForm.markAllAsTouched();
-      if (this.trajetForm.get('date_depart')?.errors?.['datePassee']) {
-        this.errorMsg = '❌ Date passée interdite';
-        return;
-      }
-      this.errorMsg = 'Veuillez corriger le formulaire';
-      return;
-    }
-
-    this.loading = true;
-    const formValue = this.trajetForm.value;
-    
-    const payload = {
-      ville_depart: formValue.ville_depart.trim(),
-      ville_arrivee: formValue.ville_arrivee.trim(),
-      date_depart: formValue.date_depart,
-      heure_depart: formValue.heure_depart,
-      prix: Number(formValue.prix),
-      bus: Number(formValue.bus)
+  getActivityIcon(type: string): string {
+    const icons: Record<string, string> = {
+      reservation: 'bi-ticket-perforated',
+      trajet: 'bi-signpost-2',
+      bus: 'bi-bus-front'
     };
-
-    console.log('📤 Payload envoyé:', payload);
-    console.log('🔍 Agence:', this.agence);
-    console.log('🚌 Bus sélectionné:', this.buses.find(b => b.id === payload.bus));
-
-    this.http.post(`${this.apiUrl}/trajets/`, payload, { headers: this.getAuthHeaders() }).subscribe({
-      next: (response) => {
-        console.log('✅ Trajet créé - Réponse:', response);
-        this.successMsg = '✅ Trajet créé avec succès !';
-        this.trajetForm.reset();
-        this.loadAllData(); // ✅ Recharge IMMÉDIATEMENT pour mettre à jour les compteurs
-        setTimeout(() => this.successMsg = '', 3000);
-      },
-      error: (err: HttpErrorResponse) => {
-        console.error('❌ Erreur création:', err);
-        console.error('📄 Détails:', err.error);
-        this.errorMsg = err.error?.detail || Object.values(err.error || {})[0] || 'Erreur serveur';
-        this.loading = false;
-      }
-    });
+    return icons[type] || 'bi-clock-history';
   }
 
-  // ✅ ÉDITION TRAJET
-  editTrajet(trajet: any): void {
-    this.isEditingTrajet = true;
-    this.editingTrajetId = trajet.id;
-    this.trajetForm.patchValue({
-      ville_depart: trajet.ville_depart,
-      ville_arrivee: trajet.ville_arrivee,
-      date_depart: trajet.date_depart,
-      heure_depart: trajet.heure_depart,
-      prix: trajet.prix,
-      bus: trajet.bus?.id || trajet.bus
-    });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  getActivityClass(type: string): string {
+    const classes: Record<string, string> = {
+      reservation: 'activity reservation',
+      trajet: 'activity trajet',
+      bus: 'activity bus'
+    };
+    return classes[type] || 'activity';
   }
 
-  updateTrajetSubmit(): void {
-    if (this.trajetForm.invalid || !this.editingTrajetId) return;
-    this.loading = true;
-    const payload = { ...this.trajetForm.value };
-    this.http.put<any>(`${this.apiUrl}/trajets/${this.editingTrajetId}/`, payload, { headers: this.getAuthHeaders() }).pipe(
-      finalize(() => { this.loading = false; })
-    ).subscribe({
-      next: () => {
-        this.successMsg = '✅ Trajet mis à jour.';
-        this.cancelEdit();
-        this.loadAllData();
-        setTimeout(() => this.successMsg = '', 3000);
-      },
-      error: (err) => { this.errorMsg = err.error?.detail || 'Erreur mise à jour.'; }
-    });
+  getStatusLabel(value: any): string {
+    const status = String(value || '').replace('_', ' ').toLowerCase();
+    const labels: Record<string, string> = {
+      'en attente': 'En attente',
+      pending: 'En attente',
+      confirmee: 'Confirmee',
+      confirme: 'Confirmee',
+      annulee: 'Annulee',
+      annule: 'Annulee',
+      planifie: 'Planifie',
+      parti: 'Depart confirme',
+      actif: 'Actif',
+      inactif: 'Inactif'
+    };
+    return labels[status] || status || '-';
   }
 
-  // ✅ SUPPRESSION TRAJET
-  deleteTrajet(id: number): void {
-    if (!confirm('⚠️ Supprimer ce trajet ?')) return;
-    this.http.delete(`${this.apiUrl}/trajets/${id}/`, { headers: this.getAuthHeaders() }).subscribe({
-      next: () => { this.successMsg = '✅ Trajet supprimé.'; this.loadAllData(); },
-      error: () => { this.errorMsg = '❌ Impossible de supprimer.'; }
-    });
+  getStatusClass(value: any): string {
+    const status = String(value || '').replace('_', ' ').toLowerCase();
+    if (['confirmee', 'confirme', 'actif', 'planifie'].includes(status)) return 'status-badge success';
+    if (['annulee', 'annule', 'inactif'].includes(status)) return 'status-badge danger';
+    return 'status-badge warning';
   }
 
-  cancelEdit(): void {
-    this.isEditingTrajet = false;
-    this.editingTrajetId = null;
-    this.trajetForm.reset();
+  getClientLabel(item: any): string {
+    return item?.passager_nom || item?.client_username || item?.client_detail?.nom || item?.client?.username || 'Client';
   }
 
-  // ✅ HELPERS d'affichage
-  formatDate(dateStr: string): string {
-    if (!dateStr) return 'N/A';
-    return new Date(dateStr).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  getTrajetLabel(item: any): string {
+    const trajet = item?.trajet_detail || item?.trajet || item;
+    const depart = trajet?.ville_depart || trajet?.depart;
+    const arrivee = trajet?.ville_arrivee || trajet?.destination;
+    if (depart || arrivee) return `${depart || '-'} - ${arrivee || '-'}`;
+    return typeof trajet === 'number' ? `Trajet #${trajet}` : 'Trajet non renseigne';
   }
 
-  formatPrice(prix: number): string {
-    return new Intl.NumberFormat('fr-FR').format(prix) + ' FCFA';
-  }
-
-  getStatutBadge(statut: string): string {
-    switch(statut) {
-      case 'confirmee': return 'badge-success';
-      case 'annulee': return 'badge-danger';
-      default: return 'badge-warning text-dark';
+  formatShortDate(value: any): string {
+    if (!value) return 'Date non renseignee';
+    try {
+      return new Date(value).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+    } catch {
+      return String(value);
     }
+  }
+
+  private getDateTime(value: any): number {
+    if (!value) return 0;
+    const time = new Date(value).getTime();
+    return Number.isFinite(time) ? time : 0;
   }
 }

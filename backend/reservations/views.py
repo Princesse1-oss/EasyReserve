@@ -3,13 +3,15 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
 from django.http import FileResponse
-from django.db.models import Sum
+from django.db.models import Sum, F, DecimalField, ExpressionWrapper
+from django.shortcuts import get_object_or_404
 
 from .models import Reservation
 from .serializers import ReservationSerializer
 from .utils import generate_ticket
 
-from users.permissions import IsAdminUserCustom, IsGestionnaire
+from users.permissions import IsAdminUserCustom, IsGestionnaire, IsAdminOrGestionnaire
+from users.models import User
 
 from trajets.models import Trajet
 from buses.models import Bus
@@ -21,7 +23,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['confirmer', 'statistiques', 'activites_gestionnaire']:
-            return [IsAdminUserCustom() | IsGestionnaire()]
+            return [IsAdminOrGestionnaire()]
         if self.action in ['list', 'retrieve', 'ticket', 'annuler']:
             return [permissions.IsAuthenticated()]
         return [permissions.IsAuthenticated()]
@@ -33,6 +35,14 @@ class ReservationViewSet(viewsets.ModelViewSet):
         )
 
         if not user.is_authenticated:
+            return Reservation.objects.none()
+
+        # ✅ MODE ADMIN CONSULTANT UN GESTIONNAIRE SPÉCIFIQUE
+        manager_id = self.request.query_params.get('manager_id')
+        if manager_id and getattr(user, 'role', None) == 'ADMIN':
+            gestionnaire = get_object_or_404(User, id=manager_id, role='GESTIONNAIRE')
+            if gestionnaire.agence:
+                return base_query.filter(trajet__bus__agence=gestionnaire.agence).order_by('-date_reservation')
             return Reservation.objects.none()
 
         if getattr(user, 'role', None) == 'CLIENT':
@@ -206,7 +216,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
     def statistiques(self, request):
         user = self.request.user
 
-        queryset = Reservation.objects.filter(statut='confirmee')
+        queryset = Reservation.objects.all()
 
         if (
             getattr(user, 'role', None) == 'GESTIONNAIRE'
@@ -214,12 +224,31 @@ class ReservationViewSet(viewsets.ModelViewSet):
         ):
             queryset = queryset.filter(trajet__bus__agence=user.agence)
 
-        total = queryset.count()
-        revenus = queryset.aggregate(
-            total_rev=Sum('trajet__prix')
+        confirmed_queryset = queryset.filter(statut='confirmee')
+        total = confirmed_queryset.count()
+
+        montant_reservation = ExpressionWrapper(
+            F('nombre_places') * F('trajet__prix'),
+            output_field=DecimalField(max_digits=12, decimal_places=2)
+        )
+        revenus_reservations = confirmed_queryset.aggregate(
+            total_rev=Sum(montant_reservation)
         )['total_rev'] or 0
 
+        paiements_queryset = Paiement.objects.filter(
+            reservation__in=queryset,
+            statut='valide'
+        )
+        revenus_paiements = paiements_queryset.aggregate(
+            total_rev=Sum('montant')
+        )['total_rev'] or 0
+
+        revenus = revenus_paiements or revenus_reservations
+
         return Response({
+            'total_reservations': queryset.count(),
             'total_confirmations': total,
-            'revenus_generes': revenus
+            'en_attente': queryset.filter(statut='en_attente').count(),
+            'annulees': queryset.filter(statut='annulee').count(),
+            'revenus_generes': int(revenus)
         })

@@ -66,7 +66,7 @@ export class GestionnaireActivitesComponent implements OnInit {
     const idParam = this.route.snapshot.paramMap.get('id');
 
     if (!idParam) {
-      this.router.navigate(['/Gestionnaire']);
+      this.router.navigate(['/dashboard']);
       return;
     }
 
@@ -74,6 +74,7 @@ export class GestionnaireActivitesComponent implements OnInit {
 
     // Récupère le nom du gestionnaire depuis les queryParams (passés par le dashboard)
     this.gestionnaireNom = this.route.snapshot.queryParamMap.get('nom') || `Gestionnaire #${this.gestionnaireId}`;
+    this.agenceNom = this.route.snapshot.queryParamMap.get('agence') || 'Agence inconnue';
 
     console.log('👁️ Consultation activités gestionnaire ID:', this.gestionnaireId);
     this.chargerActivitesGestionnaire();
@@ -110,7 +111,7 @@ export class GestionnaireActivitesComponent implements OnInit {
         console.log('✅ Réponse backend:', response);
 
         // ✅ Mapping correct : response.agence (pas response.gestionnaire)
-        this.agenceNom = response.agence?.nom || 'Agence inconnue';
+        this.agenceNom = response.agence?.nom || this.agenceNom;
 
         this.reservations = response.reservations || [];
         this.trajets = response.trajets || [];
@@ -153,7 +154,25 @@ export class GestionnaireActivitesComponent implements OnInit {
   }
 
   goBack(): void {
-    this.router.navigate(['/Gestionnaire']);
+    this.router.navigate(['/dashboard']);
+  }
+
+  goToTrajets(): void {
+    this.router.navigate([`/admin/gestionnaire/${this.gestionnaireId}/trajets`], {
+      queryParams: { nom: this.gestionnaireNom, agence: this.agenceNom }
+    });
+  }
+
+  goToReservations(): void {
+    this.router.navigate([`/admin/gestionnaire/${this.gestionnaireId}/reservations`], {
+      queryParams: { nom: this.gestionnaireNom, agence: this.agenceNom }
+    });
+  }
+
+  goToBuses(): void {
+    this.router.navigate([`/admin/gestionnaire/${this.gestionnaireId}/buses`], {
+      queryParams: { nom: this.gestionnaireNom, agence: this.agenceNom }
+    });
   }
 
   formatPrix(prix: number): string {

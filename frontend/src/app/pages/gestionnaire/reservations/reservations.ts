@@ -2,8 +2,10 @@ import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { HttpClient, HttpHeaders, HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
+import { Router, RouterModule, ActivatedRoute } from '@angular/router';
 import { environment } from '../../../../environments/environment';
-import { catchError, finalize, forkJoin, of } from 'rxjs';
+import { catchError, finalize, forkJoin, of, timeout } from 'rxjs';
+import { AuthService } from '../../../services/auth.service';
 
 // ==================== INTERFACES ====================
 export interface TrajetStatus {
@@ -61,12 +63,18 @@ export interface ReservationStats {
 @Component({
   selector: 'app-gestionnaire-reservations',
   standalone: true,
-  imports: [CommonModule, FormsModule, DatePipe],
+  imports: [CommonModule, FormsModule, DatePipe, RouterModule],
   templateUrl: './reservations.html',
   styleUrl: './reservations.scss'
 })
 export class GestionnaireReservations implements OnInit {
   private readonly apiUrl = environment.apiUrl;
+  
+  // ✅ MODE ADMIN
+  isAdminMode = false;
+  managerId: string | null = null;
+  gestionnaireNom = '';
+  agenceNom = '';
   
   // Données
   reservations: ReservationItem[] = [];
@@ -105,11 +113,35 @@ export class GestionnaireReservations implements OnInit {
 
   constructor(
     private http: HttpClient,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private authService: AuthService,
+    private router: Router,
+    private route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
+    // ✅ DETECTION MODE ADMIN
+    this.managerId = this.route.snapshot.paramMap.get('managerId');
+    this.isAdminMode = !!this.managerId;
+    if (this.isAdminMode) {
+      this.gestionnaireNom = this.route.snapshot.queryParamMap.get('nom') || 'Gestionnaire';
+      this.agenceNom = this.route.snapshot.queryParamMap.get('agence') || 'Agence inconnue';
+    }
+    
     this.loadData();
+    setTimeout(() => {
+      if (this.loading) {
+        this.loading = false;
+        this.errorText = 'Chargement interrompu. Verifiez que le serveur Django est demarre et que votre session est valide.';
+        this.cdr.detectChanges();
+      }
+    }, 9000);
+  }
+
+  goBack(): void {
+    this.router.navigate([this.isAdminMode ? `/dashboard/gestionnaires/${this.managerId}/activites` : '/gestionnaire'], {
+      queryParams: this.isAdminMode ? { nom: this.gestionnaireNom, agence: this.agenceNom } : {}
+    });
   }
 
   private getAuthHeaders(): HttpHeaders {
@@ -120,31 +152,46 @@ export class GestionnaireReservations implements OnInit {
     });
   }
 
+  onLogout(): void {
+    this.authService.logout();
+    this.router.navigate(['/login']);
+  }
+
   loadData(): void {
     this.loading = true;
     this.errorText = '';
 
+    // ✅ Construire les URLs avec managerId si mode admin
+    const reservationsUrl = this.isAdminMode 
+      ? `${this.apiUrl}/reservations/?manager_id=${this.managerId}` 
+      : `${this.apiUrl}/reservations/`;
+    const trajetsUrl = this.isAdminMode 
+      ? `${this.apiUrl}/trajets/?manager_id=${this.managerId}` 
+      : `${this.apiUrl}/trajets/`;
+
     forkJoin({
-      reservations: this.http.get<ReservationItem[]>(`${this.apiUrl}/reservations/`, { 
+      reservations: this.http.get<ReservationItem[]>(reservationsUrl, { 
         headers: this.getAuthHeaders() 
-      }).pipe(catchError(() => of([]))),
-      trajets: this.http.get<TrajetStatus[]>(`${this.apiUrl}/trajets/`, {
+      }).pipe(timeout(8000), catchError(() => of([]))),
+      trajets: this.http.get<TrajetStatus[]>(trajetsUrl, {
         headers: this.getAuthHeaders()
-      }).pipe(catchError(() => of([])))
+      }).pipe(timeout(8000), catchError(() => of([])))
     }).pipe(
       finalize(() => { this.loading = false; })
     ).subscribe({
       next: ({ reservations, trajets }) => {
-        const validTrajetIds = new Set(trajets.map(t => t.id));
+        const reservationList = this.extractData(reservations);
+        const trajetList = this.extractData(trajets);
+        const validTrajetIds = new Set(trajetList.map(t => t.id));
         
-        this.reservations = reservations.filter(r => {
+        this.reservations = reservationList.filter(r => {
           const trajetId = r.trajet_detail?.id;
           return !trajetId || validTrajetIds.has(trajetId);
         }).sort((a, b) => 
           new Date(b.date_reservation).getTime() - new Date(a.date_reservation).getTime()
         );
         
-        this.trajets = trajets;
+        this.trajets = trajetList;
         this.filteredReservations = [...this.reservations];
         
         this.calculateStats();
@@ -382,6 +429,26 @@ export class GestionnaireReservations implements OnInit {
       case 'annulee': return { class: 'badge-danger', label: '❌ Annulée' };
       default: return { class: 'badge-warning text-dark', label: '⏳ En attente' };
     }
+  }
+
+  getStatutBadgeClass(statut: string): string {
+    if (statut === 'confirmee') return 'confirmee';
+    if (statut === 'annulee') return 'annulee';
+    return 'en_attente';
+  }
+
+  private extractData<T = any>(response: any): T[] {
+    if (!response) return [];
+    if (Array.isArray(response)) return response;
+    if (Array.isArray(response.results)) return response.results;
+    if (Array.isArray(response.data)) return response.data;
+    return [];
+  }
+
+  getStatutLabel(statut: string): string {
+    if (statut === 'confirmee') return 'Confirmee';
+    if (statut === 'annulee') return 'Annulee';
+    return 'En attente';
   }
 
   formatDate(dateStr: string): string {

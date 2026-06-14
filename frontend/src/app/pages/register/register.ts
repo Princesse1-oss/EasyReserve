@@ -70,8 +70,10 @@ export class Register {
     if (!user) { this.router.navigate(['/login']); return; }
     switch (user.role) {
       case 'ADMIN':
+        this.router.navigate(['/dashboard']);
+        break;
       case 'GESTIONNAIRE':
-        this.router.navigate(['/Gestionnaire']);
+        this.router.navigate(['/gestionnaire']);
         break;
       case 'CLIENT':
         this.router.navigate(['/client/trajets']);

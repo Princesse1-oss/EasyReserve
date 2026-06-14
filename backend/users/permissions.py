@@ -27,6 +27,15 @@ class IsClient(permissions.BasePermission):
             and getattr(request.user, 'role', None) == 'CLIENT'
         )
 
+class IsAdminOrGestionnaire(permissions.BasePermission):
+    """Permet l'accès aux utilisateurs ayant le rôle ADMIN ou GESTIONNAIRE."""
+    def has_permission(self, request, view):
+        return (
+            request.user 
+            and request.user.is_authenticated 
+            and getattr(request.user, 'role', None) in ['ADMIN', 'GESTIONNAIRE']
+        )
+
 class IsAdminOrReadOnly(permissions.BasePermission):
     """Autorise l'écriture uniquement aux administrateurs, lecture pour les authentifiés."""
     def has_permission(self, request, view):

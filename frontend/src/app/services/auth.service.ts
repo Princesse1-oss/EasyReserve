@@ -52,6 +52,10 @@ export class AuthService {
   }
 
   getCurrentUser(): User | null {
+    const tokenUser = this.getUserFromToken();
+    if (tokenUser && JSON.stringify(tokenUser) !== JSON.stringify(this.currentUserSubject.value)) {
+      this.updateCurrentUser(tokenUser);
+    }
     return this.currentUserSubject.value;
   }
 
@@ -68,6 +72,10 @@ export class AuthService {
         localStorage.removeItem('currentUser');
         this.currentUserSubject.next(null);
         return false;
+      }
+      const tokenUser = this.mapDecodedUser(decoded);
+      if (tokenUser) {
+        this.updateCurrentUser(tokenUser);
       }
       return true;
     } catch {
@@ -102,22 +110,11 @@ export class AuthService {
           
           try {
             const decoded: any = jwtDecode(response.access);
-            const user: User = {
-              id: decoded.user_id,
-              username: decoded.username,
-              email: decoded.email,
-              first_name: decoded.first_name || '',
-              last_name: decoded.last_name || '',
-              telephone: decoded.telephone || '',
-              profile_picture: decoded.profile_picture || null,
-              role: (decoded.role || 'CLIENT') as 'ADMIN' | 'GESTIONNAIRE' | 'CLIENT',
-              agence_id: decoded.agence_id || null,
-              is_active: decoded.is_active,
-              date_joined: decoded.date_joined
-            };
-            this.currentUserSubject.next(user);
-            localStorage.setItem('currentUser', JSON.stringify(user));
-            console.log('✅ User mis à jour:', user.username);
+            const user = this.mapDecodedUser(decoded);
+            if (user) {
+              this.updateCurrentUser(user);
+              console.log('✅ User mis à jour:', user.username);
+            }
           } catch (e) {
             console.warn('⚠️ Token decode error:', e);
           }
@@ -146,5 +143,37 @@ export class AuthService {
       'Authorization': token ? `Bearer ${token}` : '',
       'Content-Type': 'application/json'
     });
+  }
+
+  private getUserFromToken(): User | null {
+    const token = this.getToken();
+    if (!token) return null;
+
+    try {
+      return this.mapDecodedUser(jwtDecode(token) as any);
+    } catch {
+      return null;
+    }
+  }
+
+  private mapDecodedUser(decoded: any): User | null {
+    if (!decoded) return null;
+
+    const role = String(decoded.role || 'CLIENT').toUpperCase() as User['role'];
+    if (!['ADMIN', 'GESTIONNAIRE', 'CLIENT'].includes(role)) return null;
+
+    return {
+      id: Number(decoded.user_id || decoded.id),
+      username: decoded.username || '',
+      email: decoded.email || '',
+      first_name: decoded.first_name || '',
+      last_name: decoded.last_name || '',
+      telephone: decoded.telephone || '',
+      profile_picture: decoded.profile_picture || null,
+      role,
+      agence_id: decoded.agence_id || null,
+      is_active: decoded.is_active,
+      date_joined: decoded.date_joined
+    };
   }
 }

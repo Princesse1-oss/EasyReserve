@@ -22,12 +22,17 @@ export const adminGuard: CanActivateFn = (route: ActivatedRouteSnapshot, state: 
     return true;
   }
 
-  // ✅ Redirection vers le dashboard principal
-  router.navigate(['/Gestionnaire']);
+  if (!authService.isLoggedIn()) {
+    router.navigate(['/login']);
+  } else if (authService.isGestionnaire()) {
+    router.navigate(['/gestionnaire']);
+  } else {
+    router.navigate(['/client/trajets']);
+  }
   return false;
 };
 
-// ✅ Guard pour les pages réservées aux gestionnaires ET admins (pas les clients)
+// Guard pour les pages reservees aux gestionnaires uniquement.
 export const gestionnaireGuard: CanActivateFn = (route: ActivatedRouteSnapshot, state: RouterStateSnapshot): boolean => {
   const authService = inject<AuthService>(AuthService);
   const router = inject(Router);
@@ -38,12 +43,15 @@ export const gestionnaireGuard: CanActivateFn = (route: ActivatedRouteSnapshot, 
   }
 
   const user = authService.getCurrentUser();
-  if (user?.role === 'ADMIN' || user?.role === 'GESTIONNAIRE') {
+  if (user?.role === 'GESTIONNAIRE') {
     return true;
   }
 
-  // Client redirigé vers son espace
-  router.navigate(['/client/trajets']);
+  if (user?.role === 'ADMIN') {
+    router.navigate(['/dashboard']);
+  } else {
+    router.navigate(['/client/trajets']);
+  }
   return false;
 };
 
@@ -55,8 +63,10 @@ export const publicGuard: CanActivateFn = (): boolean => {
 
   if (authService.isLoggedIn()) {
     const user = authService.getCurrentUser();
-    if (user?.role === 'ADMIN' || user?.role === 'GESTIONNAIRE') {
-      router.navigate(['/Gestionnaire']);
+    if (user?.role === 'ADMIN') {
+      router.navigate(['/dashboard']);
+    } else if (user?.role === 'GESTIONNAIRE') {
+      router.navigate(['/gestionnaire']);
     } else {
       router.navigate(['/client/trajets']);
     }

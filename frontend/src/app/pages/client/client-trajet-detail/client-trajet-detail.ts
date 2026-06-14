@@ -134,13 +134,15 @@ export class ClientTrajetDetail implements OnInit, OnDestroy {
     ).subscribe({
       next: (res: any) => {
         const raw: SiegePlan[] = Array.isArray(res) ? res : (res?.results || []);
-        // Marquer les sièges déjà réservés pour CE trajet
-        this.http.get<any>(`${this.apiUrl}/reservations/?trajet=${this.trajetId}&statut=confirmee&page_size=200`).subscribe({
+        // Marquer les sièges déjà réservés pour CE trajet (confirmee ou en_attente)
+        this.http.get<any>(`${this.apiUrl}/reservations/?trajet=${this.trajetId}&page_size=200`).subscribe({
           next: (resData: any) => {
             const reservations = Array.isArray(resData) ? resData : (resData?.results || []);
             const siegesReserves = new Set<number>();
             reservations.forEach((r: any) => {
-              if (r.place) siegesReserves.add(r.place);
+              if (r.place && (r.statut === 'confirmee' || r.statut === 'en_attente')) {
+                siegesReserves.add(r.place);
+              }
             });
             this.sieges = raw.map(s => ({
               ...s,

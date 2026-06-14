@@ -119,43 +119,54 @@ class GestionnaireAdminViewSet(viewsets.ModelViewSet):
         gestionnaire = get_object_or_404(User, id=pk, role='GESTIONNAIRE')
         
         # 2. Vérifier qu'il a une agence assignée
-        if not hasattr(gestionnaire, 'agence') or not gestionnaire.agence:
-            return Response(
-                {'detail': 'Ce gestionnaire n\'a pas d\'agence associée.'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        agence_cible = None
+        reservations = []
+        trajets = []
+        buses = []
         
-        # 3. Récupérer SON agence (celle du gestionnaire ciblé, pas celle de l'admin)
-        agence_cible = gestionnaire.agence
+        if hasattr(gestionnaire, 'agence') and gestionnaire.agence:
+            agence_cible = gestionnaire.agence
+            reservations = Reservation.objects.filter(
+                trajet__bus__agence=agence_cible  # ✅ Filtrage CRITIQUE ici
+            ).select_related('trajet', 'client').order_by('-date_reservation')
+            
+            trajets = Trajet.objects.filter(
+                bus__agence=agence_cible  # ✅ Filtrage CRITIQUE ici
+            ).select_related('bus').order_by('-date_depart')
+            
+            buses = Bus.objects.filter(
+                agence=agence_cible  # ✅ Filtrage CRITIQUE ici
+            ).order_by('-date_creation')
         
-        # 4. Filtrer TOUTES les requêtes PAR CETTE AGENCE UNIQUE
-        reservations = Reservation.objects.filter(
-            trajet__bus__agence=agence_cible  # ✅ Filtrage CRITIQUE ici
-        ).select_related('trajet', 'client').order_by('-date_reservation')
+        # Calculer les statistiques correctement
+        def get_count(queryset_or_list):
+            if hasattr(queryset_or_list, 'count') and callable(queryset_or_list.count):
+                try:
+                    return queryset_or_list.count()
+                except TypeError:
+                    pass
+            return len(queryset_or_list)
         
-        trajets = Trajet.objects.filter(
-            bus__agence=agence_cible  # ✅ Filtrage CRITIQUE ici
-        ).select_related('bus').order_by('-date_depart')
+        def get_confirmed_count(queryset_or_list):
+            if hasattr(queryset_or_list, 'filter'):
+                return queryset_or_list.filter(statut='confirmee').count()
+            return 0
         
-        buses = Bus.objects.filter(
-            agence=agence_cible  # ✅ Filtrage CRITIQUE ici
-        ).order_by('-date_creation')
-        
-        # 5. Retourner les données UNIQUES à ce gestionnaire
+        # 3. Retourner les données UNIQUES à ce gestionnaire (même sans agence)
         return Response({
             'agence': {
-                'id': agence_cible.id,
-                'nom': agence_cible.nom,
-                'ville': getattr(agence_cible, 'ville', ''),
-                'contact': getattr(agence_cible, 'contact', '')
+                'id': agence_cible.id if agence_cible else None,
+                'nom': agence_cible.nom if agence_cible else 'Non assignée',
+                'ville': getattr(agence_cible, 'ville', '') if agence_cible else '',
+                'contact': getattr(agence_cible, 'contact', '') if agence_cible else ''
             },
             'stats': {
-                'total_reservations': reservations.count(),
-                'reservations_confirmees': reservations.filter(statut='confirmee').count(),
-                'total_trajets': trajets.count(),
-                'total_bus': buses.count()
+                'total_reservations': get_count(reservations),
+                'reservations_confirmees': get_confirmed_count(reservations),
+                'total_trajets': get_count(trajets),
+                'total_bus': get_count(buses)
             },
-            'reservations': ReservationSerializer(reservations[:10], many=True).data,
-            'trajets': TrajetSerializer(trajets[:10], many=True).data,
-            'buses': BusSerializer(buses[:10], many=True).data
+            'reservations': ReservationSerializer(reservations[:10], many=True).data if hasattr(reservations, 'filter') else reservations[:10],
+            'trajets': TrajetSerializer(trajets[:10], many=True).data if hasattr(trajets, 'filter') else trajets[:10],
+            'buses': BusSerializer(buses[:10], many=True).data if hasattr(buses, 'filter') else buses[:10]
         })

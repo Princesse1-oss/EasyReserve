@@ -32,7 +32,7 @@ class Trajet(models.Model):
     date_creation = models.DateTimeField(null=True, blank=True, auto_now_add=True)
 
     def __str__(self):
-        return f"{self.ville_depart} → {self.ville_arrivee} ({self.date_depart})"
+        return f"{self.ville_depart} -> {self.ville_arrivee} ({self.date_depart})"
 
     @property
     def places_disponibles(self):

@@ -1,58 +1,131 @@
-<app-navbar></app-navbar>
-<div class="page-container">
-  <h2>Finaliser mon achat</h2>
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <a routerLink="/gestionnaire" class="admin-brand">
+      <span><i class="bi bi-bus-front"></i></span>
+      <strong>REBUS</strong>
+    </a>
+    <nav class="admin-menu">
+      <a routerLink="/gestionnaire"><i class="bi bi-speedometer2"></i>Tableau de bord</a>
+      <a routerLink="/gestionnaire/trajets"><i class="bi bi-signpost-2"></i>Trajets et horaires</a>
+      <a routerLink="/gestionnaire/reservations"><i class="bi bi-ticket-perforated"></i>Reservations</a>
+      <a routerLink="/gestionnaire/buses"><i class="bi bi-bus-front"></i>Bus</a>
+      <a routerLink="/gestionnaire/chauffeurs"><i class="bi bi-person-badge"></i>Chauffeurs</a>
+      <a routerLink="/gestionnaire/paiement" class="active"><i class="bi bi-credit-card"></i>Paiements</a>
+    </nav>
 
-  <div *ngIf="loadingData" class="loading">Extraction des données de facturation...</div>
+    <button class="sidebar-logout" type="button" (click)="onLogout()">
+      <i class="bi bi-box-arrow-left"></i>
+      Deconnexion
+    </button>
+  </aside>
 
-  <div class="paiement-grid" *ngIf="!loadingData && reservation">
-    
-    <!-- Résumé du Ticket -->
-    <div class="summary-card">
-      <h3>Détails du billet</h3>
-      <div class="summary-body">
-        <p><strong>Voyage :</strong> {{ reservation.trajet_detail.ville_depart }} → {{ reservation.trajet_detail.ville_arrivee }}</p>
-        <p><strong>Départ :</strong> Le {{ reservation.trajet_detail.date_depart }} à {{ reservation.trajet_detail.heure_depart }}</p>
-        <p><strong>Place réservée :</strong> Siège N° {{ reservation.place_detail?.numero_siege }}</p>
-        <hr />
-        <div class="total-block">
-          <span>Net à mandater :</span>
-          <span class="price">{{ reservation.trajet_detail.prix }} FCFA</span>
-        </div>
+  <main class="admin-main">
+    <header class="page-header">
+      <div>
+        <span class="eyebrow">Controle financier</span>
+        <h1>Paiements</h1>
+        <p>Consultez les transactions, validez les paiements conformes et refusez les references incorrectes.</p>
       </div>
-    </div>
+      <button class="btn-rebus-primary" (click)="loadPaiements()"><i class="bi bi-arrow-clockwise"></i> Actualiser</button>
+    </header>
 
-    <!-- Formulaire d'encaissement -->
-    <div class="form-card">
-      <h3>Mode de règlement</h3>
-      
-      <!-- Sélecteur visuel de méthode -->
-      <div class="method-selector">
-        <button type="button" [class.active]="methodeSelectionnee === 'orange_money'" (click)="changerMethode('orange_money')">🟠 Orange Money</button>
-        <button type="button" [class.active]="methodeSelectionnee === 'mtn_money'" (click)="changerMethode('mtn_money')">🟡 MTN MoMo</button>
-        <button type="button" [class.active]="methodeSelectionnee === 'carte_bancaire'" (click)="changerMethode('carte_bancaire')">💳 Carte Bancaire</button>
+    <section class="kpi-grid">
+      <article class="metric-card"><span>Total paiements</span><strong>{{ totalPaiements }}</strong></article>
+      <article class="metric-card"><span>En attente</span><strong>{{ paiementsEnAttente }}</strong></article>
+      <article class="metric-card"><span>Valides</span><strong>{{ paiementsValides }}</strong></article>
+      <article class="metric-card revenue"><span>Revenu valide</span><strong>{{ formatPrice(revenuValide) }}</strong></article>
+    </section>
+
+    @if (succes) {
+      <div class="notice success"><i class="bi bi-check-circle"></i>{{ succes }}</div>
+    }
+    @if (erreur) {
+      <div class="notice error"><i class="bi bi-exclamation-triangle"></i>{{ erreur }}</div>
+    }
+
+    <section class="filter-panel">
+      <div class="form-row">
+        <label>Recherche</label>
+        <input type="text" placeholder="Client, trajet, transaction..." [(ngModel)]="searchQuery" (input)="applyFilters()" />
       </div>
+      <div class="form-row">
+        <label>Statut</label>
+        <select [(ngModel)]="filterStatut" (change)="applyFilters()">
+          <option value="all">Tous les statuts</option>
+          <option value="en_attente">En attente</option>
+          <option value="valide">Valide</option>
+          <option value="echoue">Echoue</option>
+          <option value="annule">Annule</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Methode</label>
+        <select [(ngModel)]="filterMethode" (change)="applyFilters()">
+          <option value="all">Toutes</option>
+          <option value="orange_money">Orange Money</option>
+          <option value="mtn_money">MTN MoMo</option>
+          <option value="mtn_momo">MTN MoMo</option>
+          <option value="carte_bancaire">Carte bancaire</option>
+          <option value="carte">Carte bancaire</option>
+          <option value="espece">Especes</option>
+        </select>
+      </div>
+      <button class="btn-rebus-secondary" (click)="resetFilters()">Reinitialiser</button>
+    </section>
 
-      <div *ngIf="erreur" class="erreur">{{ erreur }}</div>
-      <div *ngIf="succes" class="succes">{{ succes }}</div>
+    <section class="table-panel">
+      <header>
+        <span class="eyebrow">{{ filteredPaiements.length }} resultat(s)</span>
+        <h2>Transactions</h2>
+      </header>
 
-      <form [formGroup]="paiementForm" (ngSubmit)="onSubmit()">
-        
-        <div class="form-group" *ngIf="methodeSelectionnee !== 'carte_bancaire'">
-          <label for="telephone_paiement">Numéro de téléphone de débit</label>
-          <input id="telephone_paiement" type="text" formControlName="telephone_paiement" placeholder="Ex: 699XXXXXX" />
+      @if (filteredPaiements.length === 0) {
+        <div class="empty-state">
+          <i class="bi bi-credit-card"></i>
+          <h3>{{ loading ? 'Aucune donnee chargee pour le moment' : 'Aucun paiement trouve' }}</h3>
+          <p>{{ loading ? 'Les transactions apparaitront ici des que le serveur repondra.' : 'Les transactions apparaitront ici apres declaration par les clients.' }}</p>
         </div>
-
-        <div class="form-group">
-          <label for="transaction_id">ID de transaction / Référence Reçu</label>
-          <input id="transaction_id" type="text" formControlName="transaction_id" placeholder="Ex: TXN9823102391" />
-          <small class="hint">Saisissez l'ID de transaction reçu par SMS ou sur votre reçu.</small>
+      } @else {
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Client</th>
+                <th>Trajet</th>
+                <th>Methode</th>
+                <th>Reference</th>
+                <th>Montant</th>
+                <th>Statut</th>
+                <th>Date</th>
+                <th class="text-end">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (p of filteredPaiements; track p.id) {
+                <tr>
+                  <td><strong>#{{ p.id }}</strong></td>
+                  <td>{{ p.client_username || 'Client' }}</td>
+                  <td>{{ p.trajet_info || 'Trajet non renseigne' }}</td>
+                  <td><span class="bus-chip">{{ getMethodeLabel(p.methode) }}</span></td>
+                  <td><code>{{ p.transaction_id || 'Sans reference' }}</code></td>
+                  <td><strong class="price">{{ formatPrice(p.montant) }}</strong></td>
+                  <td><span [class]="'status-badge ' + getStatutClass(p.statut)">{{ getStatutLabel(p.statut) }}</span></td>
+                  <td>{{ formatDate(p.date_paiement) }}</td>
+                  <td class="text-end action-cell">
+                    @if (p.statut === 'en_attente') {
+                      <button class="btn-mini success" [disabled]="submittingId === p.id" (click)="validerPaiement(p.id)">Valider</button>
+                      <button class="btn-mini danger" [disabled]="submittingId === p.id" (click)="refuserPaiement(p.id)">Refuser</button>
+                    } @else {
+                      <span class="muted">Traite</span>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
         </div>
-
-        <button type="submit" [disabled]="paiementForm.invalid || submitting" class="btn-submit">
-          {{ submitting ? 'Traitement sécurisé...' : 'Valider le paiement de ' + reservation.trajet_detail.prix + ' FCFA' }}
-        </button>
-      </form>
-    </div>
-
-  </div>
+      }
+    </section>
+  </main>
 </div>

@@ -2,7 +2,7 @@ import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { catchError, finalize, forkJoin, of } from 'rxjs';
 import { environment } from '../../../../environments/environment';
@@ -45,11 +45,17 @@ export class GestionnaireChauffeurs implements OnInit {
     private fb: FormBuilder,
     private http: HttpClient,
     private authService: AuthService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private router: Router
   ) {}
 
   get user() { return this.authService.getCurrentUser(); }
   get isAdmin() { return this.user?.role === 'ADMIN'; }
+
+  onLogout(): void {
+    this.authService.logout();
+    this.router.navigate(['/login']);
+  }
 
   ngOnInit(): void {
     this.initForm();
@@ -205,6 +211,20 @@ export class GestionnaireChauffeurs implements OnInit {
     if (!busId) return '— Non assigné';
     const bus = this.buses.find(b => b.id === busId);
     return bus ? `🚌 ${bus.matricule}` : `Bus #${busId}`;
+  }
+
+  cleanStatutClass(statut: string): string {
+    if (statut === 'actif') return 'actif';
+    if (statut === 'inactif') return 'inactif';
+    if (statut === 'conge') return 'conge';
+    return 'inactif';
+  }
+
+  cleanStatutLabel(statut: string): string {
+    if (statut === 'actif') return 'Actif';
+    if (statut === 'inactif') return 'Inactif';
+    if (statut === 'conge') return 'En conge';
+    return statut;
   }
 
   get f() { return this.chauffeurForm.controls; }

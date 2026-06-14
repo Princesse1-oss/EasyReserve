@@ -8,6 +8,35 @@ import secrets
 User = get_user_model()
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        # Accepte username ou email pour la connexion
+        username_or_email = attrs.get('username')
+        password = attrs.get('password')
+        
+        if not username_or_email or not password:
+            raise serializers.ValidationError("Veuillez fournir le nom d'utilisateur/email et le mot de passe.")
+        
+        # Cherche l'utilisateur par username ou email
+        try:
+            user = User.objects.get(username=username_or_email)
+        except User.DoesNotExist:
+            try:
+                user = User.objects.get(email=username_or_email)
+            except User.DoesNotExist:
+                raise serializers.ValidationError("Identifiants incorrects.")
+        
+        # Vérifie le mot de passe
+        if not user.check_password(password):
+            raise serializers.ValidationError("Identifiants incorrects.")
+        
+        # Vérifie si le compte est actif
+        if not user.is_active:
+            raise serializers.ValidationError("Ce compte a été désactivé.")
+        
+        # Passe le username à la validation parent
+        attrs['username'] = user.username
+        return super().validate(attrs)
+
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)

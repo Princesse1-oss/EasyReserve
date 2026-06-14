@@ -18,7 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '.onrender.com']
 
 # ============================================================
 # APPLICATIONS
@@ -56,13 +56,20 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+]
+
+# Ajouter WhiteNoise uniquement en production
+if not DEBUG:
+    MIDDLEWARE.append('whitenoise.middleware.WhiteNoiseMiddleware')
+
+MIDDLEWARE.extend([
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-]
+])
 
 ROOT_URLCONF = 'EasyReserve.urls'
 
@@ -143,14 +150,14 @@ SIMPLE_JWT = {
 }
 
 # ============================================================
-# CORS — restreint aux origines connues en développement
+# CORS - restreint aux origines connues en développement
 # ============================================================
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:4200',
     'http://127.0.0.1:4200',
+    config('FRONTEND_URL', default='https://your-app.vercel.app'),
 ]
-# En production, remplacer par les domaines réels et supprimer cette ligne :
-# CORS_ALLOW_ALL_ORIGINS = True  # ← NE JAMAIS LAISSER EN PRODUCTION
+CORS_ALLOW_CREDENTIALS = True
 
 # ============================================================
 # EMAIL — chargé depuis .env
@@ -164,7 +171,8 @@ EMAIL_USE_TLS = False
 EMAIL_USE_SSL = True
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = f'EasyReserve <{config("EMAIL_HOST_USER", default="noreply@easyreserve.com")}>'
+_from_email = EMAIL_HOST_USER if EMAIL_HOST_USER else "noreply@easyreserve.com"
+DEFAULT_FROM_EMAIL = f'EasyReserve <{_from_email}>'
 
 # ============================================================
 # TWILIO SMS — chargé depuis .env
@@ -184,3 +192,18 @@ CELERY_TASK_SERIALIZER = 'json'
 # FICHIERS STATIQUES
 # ============================================================
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Utiliser WhiteNoise uniquement en production
+if not DEBUG:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# ============================================================
+# BASE DE DONNÉES - Pour Render (PostgreSQL)
+# ============================================================
+import os
+if os.environ.get('DATABASE_URL'):
+    import dj_database_url
+    DATABASES = {
+        'default': dj_database_url.config(default=os.environ['DATABASE_URL'])
+    }

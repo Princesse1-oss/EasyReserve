@@ -1,105 +1,177 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute, Router, RouterModule } from '@angular/router';
-import { PaiementService } from '../../../services/paiement.service';
-import { ReservationService, Reservation } from '../../../services/reservation.service';
-import { Navbar } from '../../../components/navbar/navbar';
+import { FormsModule } from '@angular/forms';
+import { Router, RouterModule } from '@angular/router';
+import { PaiementService, PaiementResponse } from '../../../services/paiement.service';
+import { AuthService } from '../../../services/auth.service';
+
+type PaiementStatut = 'all' | 'en_attente' | 'valide' | 'echoue' | 'annule';
 
 @Component({
   selector: 'app-paiement',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterModule, Navbar],
+  imports: [CommonModule, FormsModule, RouterModule],
   templateUrl: './paiement.html',
-  styleUrl: './paiement.css'
+  styleUrl: './paiement.scss'
 })
 export class Paiement implements OnInit {
-  paiementForm!: FormGroup;
-  reservation!: Reservation;
-  loadingData = true;
-  submitting = false;
+  paiements: PaiementResponse[] = [];
+  filteredPaiements: PaiementResponse[] = [];
+
+  loading = true;
+  submittingId: number | null = null;
   erreur = '';
   succes = '';
-  methodeSelectionnee: 'orange_money' | 'mtn_money' | 'carte_bancaire' = 'orange_money';
+
+  searchQuery = '';
+  filterStatut: PaiementStatut = 'all';
+  filterMethode = 'all';
 
   constructor(
-    private fb: FormBuilder,
-    private route: ActivatedRoute,
-    private router: Router,
     private paiementService: PaiementService,
-    private reservationService: ReservationService
+    private authService: AuthService,
+    private router: Router
   ) {}
 
   ngOnInit(): void {
-    const reservationId = this.route.snapshot.queryParamMap.get('reservationId');
-    if (reservationId) {
-      this.chargerDetailsReservation(Number(reservationId));
-    } else {
-      this.router.navigate(['/reservations']);
-    }
+    this.loadPaiements();
+    setTimeout(() => {
+      if (this.loading) {
+        this.loading = false;
+        this.erreur = 'Chargement interrompu. Verifiez que le serveur Django est demarre et que votre session est valide.';
+      }
+    }, 9000);
   }
 
-  chargerDetailsReservation(id: number): void {
-    this.reservationService.getReservation(id).subscribe({
-      next: (data) => {
-        this.reservation = data;
-        this.loadingData = false;
-        this.initialiserFormulaire();
+  onLogout(): void {
+    this.authService.logout();
+    this.router.navigate(['/login']);
+  }
+
+  loadPaiements(): void {
+    this.loading = true;
+    this.erreur = '';
+    this.paiementService.getPaiements().subscribe({
+      next: (data: any) => {
+        this.paiements = Array.isArray(data) ? data : (data?.results || []);
+        this.applyFilters();
+        this.loading = false;
       },
       error: () => {
-        this.erreur = 'Impossible de charger les spécifications de votre réservation.';
-        this.loadingData = false;
+        this.erreur = 'Impossible de charger les paiements.';
+        this.loading = false;
       }
     });
   }
 
-  initialiserFormulaire(): void {
-    this.paiementForm = this.fb.group({
-      methode: [this.methodeSelectionnee, Validators.required],
-      montant: [this.reservation.trajet_detail.prix, Validators.required],
-      transaction_id: ['', [Validators.required, Validators.minLength(6)]],
-      telephone_paiement: ['', [Validators.pattern('^[0-9]{9,15}$')]]
+  applyFilters(): void {
+    const q = this.searchQuery.trim().toLowerCase();
+    this.filteredPaiements = this.paiements.filter((p: any) => {
+      const matchesSearch = !q
+        || String(p.id).includes(q)
+        || String(p.client_username || '').toLowerCase().includes(q)
+        || String(p.trajet_info || '').toLowerCase().includes(q)
+        || String(p.transaction_id || '').toLowerCase().includes(q)
+        || String(p.telephone_paiement || '').includes(q);
+
+      const matchesStatut = this.filterStatut === 'all' || p.statut === this.filterStatut;
+      const matchesMethode = this.filterMethode === 'all' || p.methode === this.filterMethode;
+      return matchesSearch && matchesStatut && matchesMethode;
     });
   }
 
-  changerMethode(methode: 'orange_money' | 'mtn_money' | 'carte_bancaire'): void {
-    this.methodeSelectionnee = methode;
-    this.paiementForm.patchValue({ methode: methode });
-    
-    const telephoneControl = this.paiementForm.get('telephone_paiement');
-    if (methode === 'carte_bancaire') {
-      telephoneControl?.clearValidators();
-    } else {
-      telephoneControl?.setValidators([Validators.required, Validators.pattern('^[0-9]{9,15}$')]);
-    }
-    telephoneControl?.updateValueAndValidity();
+  resetFilters(): void {
+    this.searchQuery = '';
+    this.filterStatut = 'all';
+    this.filterMethode = 'all';
+    this.applyFilters();
   }
 
-  onSubmit(): void {
-    if (this.paiementForm.invalid || this.submitting) return;
+  validerPaiement(id: number): void {
+    this.updatePaiement(id, 'valide');
+  }
 
-    this.submitting = true;
+  refuserPaiement(id: number): void {
+    this.updatePaiement(id, 'echoue');
+  }
+
+  private updatePaiement(id: number, statut: 'valide' | 'echoue'): void {
+    if (statut === 'echoue' && !confirm('Refuser ce paiement ?')) return;
+    this.submittingId = id;
     this.erreur = '';
     this.succes = '';
 
-    const payload = {
-      reservation: this.reservation.id,
-      montant: Number(this.paiementForm.value.montant),
-      methode: this.paiementForm.value.methode,
-      transaction_id: this.paiementForm.value.transaction_id,
-      telephone_paiement: this.paiementForm.value.telephone_paiement || null
-    };
-
-    this.paiementService.creerPaiement(payload).subscribe({
+    this.paiementService.validerPaiement(id, statut).subscribe({
       next: () => {
-        this.submitting = false;
-        this.succes = 'Déclaration de transaction transmise ! En attente de validation comptable.';
-        setTimeout(() => this.router.navigate(['/reservations']), 2000);
+        const paiement = this.paiements.find((p) => p.id === id);
+        if (paiement) paiement.statut = statut;
+        this.applyFilters();
+        this.succes = statut === 'valide' ? 'Paiement valide avec succes.' : 'Paiement marque comme echoue.';
+        this.submittingId = null;
+        setTimeout(() => this.succes = '', 3000);
       },
       error: (err) => {
-        this.submitting = false;
-        this.erreur = err.error?.detail || err.error?.transaction_id?.[0] || 'Erreur lors du traitement du versement.';
+        this.erreur = err.error?.detail || 'Impossible de mettre a jour le paiement.';
+        this.submittingId = null;
       }
     });
+  }
+
+  get totalPaiements(): number {
+    return this.paiements.length;
+  }
+
+  get paiementsEnAttente(): number {
+    return this.paiements.filter((p: any) => p.statut === 'en_attente').length;
+  }
+
+  get paiementsValides(): number {
+    return this.paiements.filter((p: any) => p.statut === 'valide').length;
+  }
+
+  get revenuValide(): number {
+    return this.paiements
+      .filter((p: any) => p.statut === 'valide')
+      .reduce((total, p: any) => total + Number(p.montant || 0), 0);
+  }
+
+  formatPrice(value: number): string {
+    return new Intl.NumberFormat('fr-FR').format(Number(value || 0)) + ' FCFA';
+  }
+
+  formatDate(value: string): string {
+    if (!value) return 'Non renseignee';
+    return new Date(value).toLocaleString('fr-FR', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  getStatutClass(statut: string): string {
+    if (statut === 'valide') return 'valide';
+    if (statut === 'echoue' || statut === 'annule') return 'echoue';
+    return 'en_attente';
+  }
+
+  getStatutLabel(statut: string): string {
+    if (statut === 'valide') return 'Valide';
+    if (statut === 'echoue') return 'Echoue';
+    if (statut === 'annule') return 'Annule';
+    return 'En attente';
+  }
+
+  getMethodeLabel(methode: string): string {
+    const map: Record<string, string> = {
+      orange_money: 'Orange Money',
+      mtn_money: 'MTN MoMo',
+      mtn_momo: 'MTN MoMo',
+      carte_bancaire: 'Carte bancaire',
+      carte: 'Carte bancaire',
+      espece: 'Especes'
+    };
+    return map[methode] || methode;
   }
 }

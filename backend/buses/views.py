@@ -2,10 +2,12 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
+from django.shortcuts import get_object_or_404
 
 from .models import Bus
 from .serializers import BusSerializer
-from users.permissions import IsAdminUserCustom, IsGestionnaire
+from users.permissions import IsAdminUserCustom, IsGestionnaire, IsAdminOrGestionnaire
+from users.models import User
 
 class BusViewSet(viewsets.ModelViewSet):
     """
@@ -20,11 +22,20 @@ class BusViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAdminUserCustom() | IsGestionnaire()]
+            return [IsAdminOrGestionnaire()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
         user = self.request.user
+
+        # ✅ MODE ADMIN CONSULTANT UN GESTIONNAIRE SPÉCIFIQUE
+        manager_id = self.request.query_params.get('manager_id')
+        if manager_id and getattr(user, 'role', None) == 'ADMIN':
+            gestionnaire = get_object_or_404(User, id=manager_id, role='GESTIONNAIRE')
+            if gestionnaire.agence:
+                return Bus.objects.filter(agence=gestionnaire.agence).select_related('agence').order_by('matricule')
+            return Bus.objects.none()
+
         # L'admin voit toute la flotte globale
         if getattr(user, 'role', None) == 'ADMIN':
             return Bus.objects.all().select_related('agence').order_by('matricule')
@@ -38,8 +49,17 @@ class BusViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
+        # ✅ MODE ADMIN CONSULTANT UN GESTIONNAIRE SPÉCIFIQUE
+        manager_id = self.request.query_params.get('manager_id')
+        if manager_id and getattr(user, 'role', None) == 'ADMIN':
+            gestionnaire = get_object_or_404(User, id=manager_id, role='GESTIONNAIRE')
+            if gestionnaire.agence:
+                serializer.save(agence=gestionnaire.agence)
+                return
+        
         # Sécurité : Si c'est un gestionnaire, on le force à enregistrer le bus dans son agence uniquement
         if getattr(user, 'role', None) == 'GESTIONNAIRE' and hasattr(user, 'agence'):
             serializer.save(agence=user.agence)
         else:
             serializer.save()
+

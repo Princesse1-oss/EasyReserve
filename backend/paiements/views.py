@@ -30,13 +30,19 @@ class PaiementViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         """Permissions selon l'action."""
         if self.action in ['valider_paiement', 'statistiques']:
-            return [IsAdminUserCustom() | IsGestionnaire()]
+            from users.permissions import IsAdminOrGestionnaire
+            return [IsAdminOrGestionnaire()]
         # Création et lecture : authentifié uniquement
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
         """Filtrage par rôle avec optimisation des requêtes."""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         user = self.request.user
+        logger.info(f"get_queryset() appelé par utilisateur: {user.username}, rôle: {getattr(user, 'role', 'N/A')}")
+        
         base_query = Paiement.objects.all().select_related(
             'reservation', 
             'reservation__client', 
@@ -44,14 +50,25 @@ class PaiementViewSet(viewsets.ModelViewSet):
             'reservation__trajet__bus'
         )
 
-        if getattr(user, 'role', None) == 'ADMIN':
-            return base_query
-            
-        if getattr(user, 'role', None) == 'GESTIONNAIRE' and hasattr(user, 'agence'):
-            return base_query.filter(reservation__trajet__bus__agence=user.agence)
-            
-        # Client : voit uniquement SES paiements
-        return base_query.filter(reservation__client=user)
+        try:
+            if getattr(user, 'role', None) == 'ADMIN':
+                logger.info("Retourne tous les paiements (ADMIN)")
+                return base_query
+                
+            if getattr(user, 'role', None) == 'GESTIONNAIRE':
+                if hasattr(user, 'agence') and user.agence:
+                    logger.info(f"Retourne paiements pour agence: {user.agence.nom}")
+                    return base_query.filter(reservation__trajet__bus__agence=user.agence)
+                else:
+                    logger.warning("Gestionnaire sans agence")
+                    return base_query.none()
+                    
+            # Client : voit uniquement SES paiements
+            logger.info("Retourne paiements du client")
+            return base_query.filter(reservation__client=user)
+        except Exception as e:
+            logger.error(f"Erreur dans get_queryset(): {str(e)}", exc_info=True)
+            return base_query.none()
 
     def create(self, request, *args, **kwargs):
         """Création d'un paiement avec validation automatique pour le MVP."""
@@ -60,20 +77,6 @@ class PaiementViewSet(viewsets.ModelViewSet):
 
         reservation = serializer.validated_data['reservation']
         trajet = reservation.trajet
-
-        # ✅ BLOCAGE 1 : Voyage déjà passé
-        if trajet.date_depart < timezone.now().date():
-            return Response(
-                {'detail': 'Paiement impossible : ce voyage est déjà passé.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # ✅ BLOCAGE 2 : Voyage complet (plus de places)
-        if trajet.places_disponibles < reservation.nombre_places:
-            return Response(
-                {'detail': f'Paiement impossible : seulement {trajet.places_disponibles} place(s) disponible(s).'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
 
         paiement = serializer.save(
             statut='valide',  # MVP : validation auto (simulation)
@@ -144,14 +147,14 @@ class PaiementViewSet(viewsets.ModelViewSet):
         paiement.statut = 'annule'
         paiement.save()
         
-        # Libérer les places de la réservation
+        # Annuler la réservation associée pour libérer automatiquement les places
         reservation = paiement.reservation
-        reservation.trajet.places_disponibles += reservation.nombre_places
-        reservation.trajet.save()
+        reservation.statut = 'annulee'
+        reservation.save()
         
-        logger.info(f"Paiement #{paiement.id} annulé par {request.user}")
+        logger.info(f"Paiement #{paiement.id} et Réservation #{reservation.id} annulés par {request.user}")
         
-        return Response({'detail': 'Paiement annulé. Places libérées.'}, status=status.HTTP_200_OK)
+        return Response({'detail': 'Paiement annulé. Réservation annulée et places libérées.'}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'])
     def statistiques(self, request):
