@@ -1,4 +1,4 @@
 export const environment = {
   production: true,
-  apiUrl: '/api',  // Utilise le proxy nginx en production
+  apiUrl: 'https://easyreserve-h33t.onrender.com/api',  // Backend Render
 };

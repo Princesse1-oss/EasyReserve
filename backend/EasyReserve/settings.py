@@ -18,7 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '.onrender.com']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '.onrender.com', 'easyreserve-h33t.onrender.com']
 
 # ============================================================
 # APPLICATIONS
@@ -155,6 +155,7 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:4200',
     'http://127.0.0.1:4200',
+    'https://easy-reserve-frontend-propre-iota.vercel.app',
     config('FRONTEND_URL', default='https://your-app.vercel.app'),
 ]
 CORS_ALLOW_CREDENTIALS = True
